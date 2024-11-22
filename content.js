@@ -38,9 +38,124 @@ function highlightWords(wordList) {
         const span = document.createElement('span');
         span.innerHTML = node.textContent.replace(
             regex,
-            match => `<span class="word-highlighter-highlight">${match}</span>`
+            match => `<span class="word-highlighter-highlight" id="${match.toLowerCase()}">${match}</span>`
         );
         node.parentNode.replaceChild(span, node);
+    });
+
+    // Add hover event listeners to highlighted words
+    document.querySelectorAll('.word-highlighter-highlight').forEach(element => {
+        element.addEventListener('mouseenter', (e) => {
+            const wordId = e.target.id;  // Get the word directly from the element's ID
+            showRemoveWordPopup(wordId, e.target.getBoundingClientRect());
+        });
+    });
+}
+
+// Function to show popup for removing words
+function showRemoveWordPopup(wordId, rect) {
+    // Remove any existing popup
+    const existingPopup = document.querySelector('.word-highlighter-remove-popup');
+    if (existingPopup) {
+        existingPopup.remove();
+    }
+
+    // Create popup element
+    const popup = document.createElement('div');
+    popup.className = 'word-highlighter-popup word-highlighter-remove-popup';
+    popup.innerHTML = `
+        <div class="popup-content">
+            <p>Remove "${wordId}" from highlight list?</p>
+            <button class="popup-btn" id="removeWordYes">Yes</button>
+            <button class="popup-btn" id="removeWordNo">No</button>
+        </div>
+    `;
+
+    // Position popup near the word
+    popup.style.left = `${rect.left}px`;
+    popup.style.top = `${rect.bottom + 5}px`;
+
+    // Add event listeners
+    document.body.appendChild(popup);
+    
+    const yesButton = popup.querySelector('#removeWordYes');
+    const noButton = popup.querySelector('#removeWordNo');
+
+    let isOverPopup = false;
+    let isOverWord = true;  // Start as true since we're showing from word hover
+
+    const hidePopup = () => {
+        popup.remove();
+        // Remove the document click listener when popup is hidden
+        document.removeEventListener('click', handleOutsideClick);
+    };
+
+    // Handle clicks outside the popup
+    const handleOutsideClick = (e) => {
+        const clickedElement = e.target;
+        // Check if click is outside both the popup and the highlighted word
+        if (!popup.contains(clickedElement) && clickedElement.id !== wordId) {
+            hidePopup();
+        }
+    };
+
+    // Add document click listener
+    document.addEventListener('click', handleOutsideClick);
+
+    // Track mouse entering/leaving the popup
+    popup.addEventListener('mouseenter', () => {
+        isOverPopup = true;
+    });
+
+    popup.addEventListener('mouseleave', () => {
+        isOverPopup = false;
+    });
+
+    // Track mouse leaving the word
+    const wordElement = document.getElementById(wordId);
+    if (wordElement) {
+        wordElement.addEventListener('mouseleave', () => {
+            isOverWord = false;
+        });
+    }
+
+    yesButton.addEventListener('click', () => {
+        chrome.storage.sync.get(['wordList'], (result) => {
+            const wordList = result.wordList || [];
+            const updatedList = wordList.filter(w => w.toLowerCase() !== wordId);  // Use wordId directly
+            
+            chrome.storage.sync.set({ wordList: updatedList }, () => {
+                if (chrome.runtime.lastError) {
+                    console.error('Error saving updated word list:', chrome.runtime.lastError);
+                    return;
+                }
+                console.log('Word removed from list:', wordId);
+
+                // Find all elements with this word's highlight
+                const highlightedElements = document.querySelectorAll(`#${wordId}`);
+                highlightedElements.forEach(element => {
+                    // Get the parent span that wraps our highlighted word
+                    const parentSpan = element.parentElement;
+                    if (parentSpan && parentSpan.childNodes.length === 1) {
+                        // If this is the only highlighted word in the span, replace the span with just the text
+                        const textNode = document.createTextNode(element.textContent);
+                        parentSpan.parentNode.replaceChild(textNode, parentSpan);
+                    } else {
+                        // If there are other elements, just replace this highlight with its text
+                        const textNode = document.createTextNode(element.textContent);
+                        element.parentNode.replaceChild(textNode, element);
+                    }
+                });
+
+                // Refresh the highlighting for remaining words
+                highlightWords(updatedList);
+                hidePopup();
+            });
+        });
+    });
+
+    noButton.addEventListener('click', () => {
+        hidePopup();
     });
 }
 

@@ -2,6 +2,12 @@
     background-color: yellow;
     border-radius: 2px;
     padding: 0 2px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.word-highlighter-highlight:hover {
+    background-color: #ffeb3b;
 }
 
 .word-highlighter-popup {
@@ -42,5 +48,19 @@
 
 .word-highlighter-popup #addWordNo {
     background-color: #f44336;
+    color: white;
+}
+
+.word-highlighter-remove-popup {
+    min-width: 200px;
+}
+
+.word-highlighter-remove-popup #removeWordYes {
+    background-color: #f44336;
+    color: white;
+}
+
+.word-highlighter-remove-popup #removeWordNo {
+    background-color: #9e9e9e;
     color: white;
 }
