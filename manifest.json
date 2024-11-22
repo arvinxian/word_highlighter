@@ -3,7 +3,7 @@
   "name": "Word Highlighter",
   "version": "1.0",
   "description": "Highlights specified words on web pages",
-  "permissions": ["storage", "activeTab"],
+  "permissions": ["storage", "activeTab", "contextMenus"],
   "action": {
     "default_popup": "popup.html"
   },
@@ -13,5 +13,8 @@
       "js": ["content.js"],
       "css": ["styles.css"]
     }
-  ]
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
 }
