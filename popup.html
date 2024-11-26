@@ -31,6 +31,25 @@
             color: #666;
             margin-bottom: 10px;
         }
+        .button-container {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .button-container button {
+            flex: 1;
+        }
+        #syncButton {
+            background-color: #2196F3;
+        }
+        #syncButton:hover {
+            background-color: #1976D2;
+        }
+        .sync-status {
+            font-size: 12px;
+            margin-top: 5px;
+            color: #666;
+        }
     </style>
 </head>
 <body>
@@ -39,7 +58,11 @@
         Enter words to highlight (one per line):
     </div>
     <textarea id="wordList" placeholder="Enter words here..."></textarea>
-    <button id="saveButton">Save and Highlight</button>
+    <div class="button-container">
+        <button id="saveButton">Save and Highlight</button>
+        <button id="syncButton">Sync with Server</button>
+    </div>
+    <div id="syncStatus" class="sync-status"></div>
     <script src="popup.js"></script>
 </body>
 </html>

@@ -3,7 +3,10 @@
   "name": "Word Highlighter",
   "version": "1.0",
   "description": "Highlights specified words on web pages",
-  "permissions": ["storage", "activeTab", "contextMenus"],
+  "permissions": ["storage", "activeTab", "contextMenus", "tabs"],
+  "host_permissions": [
+    "http://localhost:8080/*"
+  ],
   "action": {
     "default_popup": "popup.html"
   },

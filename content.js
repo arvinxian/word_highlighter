@@ -316,6 +316,13 @@ document.addEventListener('mouseup', (e) => {
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     console.log('Received message:', request);
     if (request.action === 'highlight') {
+        // Remove all existing highlights first
+        document.querySelectorAll('.word-highlighter-highlight').forEach(element => {
+            const textNode = document.createTextNode(element.textContent);
+            element.parentNode.replaceChild(textNode, element);
+        });
+
+        // Apply new highlights
         highlightWords(request.wordList);
         sendResponse({status: 'success'});
     }
