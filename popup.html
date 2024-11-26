@@ -50,19 +50,66 @@
             margin-top: 5px;
             color: #666;
         }
+        .config-section {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #ddd;
+        }
+        .config-item {
+            margin-bottom: 10px;
+        }
+        .config-item label {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 3px;
+        }
+        .config-item input {
+            width: 100%;
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .user-info {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 10px;
+        }
     </style>
 </head>
 <body>
     <h2>Word Highlighter</h2>
+    
+    <!-- User Info Display -->
+    <div class="user-info">
+        Logged in as: <span id="userName">Not logged in</span>
+    </div>
+
+    <!-- Word List Section -->
     <div class="instructions">
         Enter words to highlight (one per line):
     </div>
     <textarea id="wordList" placeholder="Enter words here..."></textarea>
+    
+    <!-- Action Buttons -->
     <div class="button-container">
         <button id="saveButton">Save and Highlight</button>
         <button id="syncButton">Sync with Server</button>
     </div>
     <div id="syncStatus" class="sync-status"></div>
+
+    <!-- Configuration Section -->
+    <div class="config-section">
+        <div class="config-item">
+            <label for="syncUrl">Sync Server URL:</label>
+            <div style="display: flex; gap: 5px;">
+                <input type="text" id="syncUrl" placeholder="Enter server URL (e.g., http://localhost:8080/api/v1/stars/sync)">
+                <button id="saveSyncUrl" style="width: auto; padding: 5px 10px;">Save URL</button>
+            </div>
+            <div id="urlStatus" class="sync-status"></div>
+        </div>
+    </div>
+
     <script src="popup.js"></script>
 </body>
 </html>

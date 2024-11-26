@@ -3,18 +3,74 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveButton = document.getElementById('saveButton');
     const syncButton = document.getElementById('syncButton');
     const syncStatus = document.getElementById('syncStatus');
+    const syncUrlInput = document.getElementById('syncUrl');
+    const saveSyncUrlButton = document.getElementById('saveSyncUrl');
+    const urlStatus = document.getElementById('urlStatus');
+    const userNameSpan = document.getElementById('userName');
 
-    // Load saved words
-    chrome.storage.sync.get(['wordList'], (result) => {
-        console.log('Retrieved word list in popup:', result);
-        if (result.wordList) {
-            // Only show active words (not deleted)
-            const activeWords = result.wordList
-                .filter(item => !item.del_flag)
-                .map(item => `${item.word} (★${item.star})`)
-                .join('\n');
-            wordListTextarea.value = activeWords;
+    // Default sync URL
+    const DEFAULT_SYNC_URL = 'http://localhost:8080/api/v1/stars/sync';
+
+    // Initialize and load configurations
+    async function initializeConfigs() {
+        try {
+            const result = await chrome.storage.sync.get(['wordList', 'wordSyncURL', 'wordUser']);
+            
+            // Initialize sync URL if not set
+            if (!result.wordSyncURL) {
+                await chrome.storage.sync.set({ wordSyncURL: DEFAULT_SYNC_URL });
+                syncUrlInput.value = DEFAULT_SYNC_URL;
+            } else {
+                syncUrlInput.value = result.wordSyncURL;
+            }
+
+            // Load user info
+            if (result.wordUser) {
+                userNameSpan.textContent = result.wordUser.name;
+            }
+
+            // Load word list
+            if (result.wordList) {
+                const activeWords = result.wordList
+                    .filter(item => !item.del_flag)
+                    .map(item => `${item.word} (★${item.star})`)
+                    .join('\n');
+                wordListTextarea.value = activeWords;
+            }
+        } catch (error) {
+            console.error('Error initializing configurations:', error);
         }
+    }
+
+    // Initialize configurations on popup load
+    initializeConfigs();
+
+    // Handle sync URL save
+    saveSyncUrlButton.addEventListener('click', async () => {
+        const url = syncUrlInput.value.trim();
+        
+        if (!url) {
+            urlStatus.textContent = 'URL cannot be empty';
+            urlStatus.style.color = '#f44336';
+            return;
+        }
+
+        try {
+            // Validate URL format
+            new URL(url);
+            
+            await chrome.storage.sync.set({ wordSyncURL: url });
+            urlStatus.textContent = 'URL saved successfully';
+            urlStatus.style.color = '#4CAF50';
+        } catch (error) {
+            urlStatus.textContent = 'Invalid URL format';
+            urlStatus.style.color = '#f44336';
+        }
+
+        // Clear status message after 3 seconds
+        setTimeout(() => {
+            urlStatus.textContent = '';
+        }, 3000);
     });
 
     // Save words and trigger highlighting
@@ -62,21 +118,32 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Add sync functionality
+    // Updated sync functionality
     syncButton.addEventListener('click', async () => {
         try {
+            // Get configurations
+            const config = await chrome.storage.sync.get(['wordSyncURL', 'wordUser', 'wordList']);
+            
+            // Validate configuration
+            if (!config.wordSyncURL) {
+                throw new Error('Sync URL not configured');
+            }
+            if (!config.wordUser) {
+                throw new Error('User not configured');
+            }
+
             syncStatus.textContent = 'Syncing...';
             syncButton.disabled = true;
 
-            // Get current word list
-            const result = await chrome.storage.sync.get(['wordList']);
-            const currentList = result.wordList || [];
+            const currentList = config.wordList || [];
 
-            // Send sync request to server
-            const response = await fetch('http://localhost:8080/api/v1/stars/sync', {
+            // Send sync request to configured server
+            const response = await fetch(config.wordSyncURL, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'User-Id': config.wordUser.id.toString(),
+                    'User-Name': config.wordUser.name
                 },
                 body: JSON.stringify({
                     data: currentList
@@ -114,21 +181,38 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 syncStatus.textContent = 'Sync completed successfully!';
-                syncStatus.style.color = '#4CAF50'; // Green color for success
+                syncStatus.style.color = '#4CAF50';
             } else {
                 throw new Error(serverResponse.message || 'Sync failed');
             }
         } catch (error) {
             console.error('Sync error:', error);
             syncStatus.textContent = `Sync failed: ${error.message}`;
-            syncStatus.style.color = '#f44336'; // Red color for error
+            syncStatus.style.color = '#f44336';
         } finally {
             syncButton.disabled = false;
-            // Clear status message after 3 seconds
             setTimeout(() => {
                 syncStatus.textContent = '';
                 syncStatus.style.color = '#666';
             }, 3000);
+        }
+    });
+
+    // Initialize default user if not exists (for development)
+    chrome.storage.sync.get(['wordUser'], (result) => {
+        if (!result.wordUser) {
+            const defaultUser = {
+                id: 1,
+                name: "xy",
+                token: 3,
+                create_time: new Date().toISOString(),
+                update_time: new Date().toISOString(),
+                del_flag: false
+            };
+            chrome.storage.sync.set({ wordUser: defaultUser }, () => {
+                console.log('Default user initialized:', defaultUser);
+                userNameSpan.textContent = defaultUser.name;
+            });
         }
     });
 });

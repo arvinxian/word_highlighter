@@ -5,7 +5,8 @@
   "description": "Highlights specified words on web pages",
   "permissions": ["storage", "activeTab", "contextMenus", "tabs"],
   "host_permissions": [
-    "http://localhost:8080/*"
+    "http://localhost:8080/*",
+    "http://localhost:8090/*"
   ],
   "action": {
     "default_popup": "popup.html"
