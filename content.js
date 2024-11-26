@@ -5,7 +5,10 @@ let isHandlingClick = false;
 function highlightWords(wordList) {
     console.log('Highlighting words:', wordList);
     // Create a regular expression from the word list
-    const regex = new RegExp(`\\b(${wordList.join('|')})\\b`, 'gi');
+    const words = wordList
+        .filter(item => !item.del_flag)
+        .map(item => item.word);
+    const regex = new RegExp(`\\b(${words.join('|')})\\b`, 'gi');
 
     // Walk through all text nodes in the document
     const walker = document.createTreeWalker(
@@ -38,7 +41,17 @@ function highlightWords(wordList) {
         const span = document.createElement('span');
         span.innerHTML = node.textContent.replace(
             regex,
-            match => `<span class="word-highlighter-highlight" id="${match.toLowerCase()}">${match}</span>`
+            match => {
+                const wordObj = wordList.find(item => 
+                    item.word.toLowerCase() === match.toLowerCase()
+                );
+                return `<span 
+                    class="word-highlighter-highlight" 
+                    id="${match.toLowerCase()}"
+                    data-star="${wordObj.star}"
+                    data-user-id="${wordObj.user_id}"
+                >${match}</span>`;
+            }
         );
         node.parentNode.replaceChild(span, node);
     });
@@ -122,7 +135,16 @@ function showRemoveWordPopup(wordId, rect) {
     yesButton.addEventListener('click', () => {
         chrome.storage.sync.get(['wordList'], (result) => {
             const wordList = result.wordList || [];
-            const updatedList = wordList.filter(w => w.toLowerCase() !== wordId);  // Use wordId directly
+            const updatedList = wordList.map(item => {
+                if (item.word.toLowerCase() === wordId) {
+                    return {
+                        ...item,
+                        del_flag: true,
+                        update_time: new Date().toISOString()
+                    };
+                }
+                return item;
+            });
             
             chrome.storage.sync.set({ wordList: updatedList }, () => {
                 if (chrome.runtime.lastError) {
@@ -198,8 +220,17 @@ function showAddWordPopup(selectedText, x, y) {
             const wordList = result.wordList || [];
             console.log('Parsed word list:', wordList);
 
-            if (!wordList.includes(selectedText)) {
-                wordList.push(selectedText);
+            if (!wordList.some(item => item.word === selectedText)) {
+                const newWord = {
+                    word: selectedText,
+                    user_id: 1, // You'll need to get this from your auth system
+                    star: 0,
+                    create_time: new Date().toISOString(),
+                    update_time: new Date().toISOString(),
+                    del_flag: false
+                };
+                
+                wordList.push(newWord);
                 console.log('Added new word, saving list:', wordList);
 
                 chrome.storage.sync.set({ wordList: wordList }, () => {
