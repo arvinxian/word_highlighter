@@ -263,7 +263,6 @@ function showAddWordPopup(selectedText, x, y) {
     const handleAddWord = () => {
         console.log('User clicked Yes to add word:', selectedText);
         
-        // Check if chrome.storage is available
         if (!chrome.storage || !chrome.storage.sync) {
             console.error('Chrome storage API is not available');
             return;
@@ -274,30 +273,39 @@ function showAddWordPopup(selectedText, x, y) {
             const wordList = result.wordList || [];
             console.log('Parsed word list:', wordList);
 
-            if (!wordList.some(item => item.word === selectedText)) {
+            // Check if word exists (including deleted ones)
+            const existingWord = wordList.find(item => 
+                item.word.toLowerCase() === selectedText.toLowerCase()
+            );
+
+            if (!existingWord) {
                 const newWord = {
                     word: selectedText,
-                    user_id: 1, // You'll need to get this from your auth system
+                    user_id: 1,
                     star: 0,
                     create_time: new Date().toISOString(),
                     update_time: new Date().toISOString(),
                     del_flag: false
                 };
-                
                 wordList.push(newWord);
-                console.log('Added new word, saving list:', wordList);
-
-                chrome.storage.sync.set({ wordList: wordList }, () => {
-                    if (chrome.runtime.lastError) {
-                        console.error('Error saving word list:', chrome.runtime.lastError);
-                        return;
-                    }
-                    console.log('Successfully saved word list:', wordList);
-                    highlightWords(wordList);
-                });
+            } else if (existingWord.del_flag) {
+                // Reactivate deleted word
+                existingWord.del_flag = false;
+                existingWord.star = 0;
+                existingWord.update_time = new Date().toISOString();
             } else {
-                console.log('Word already exists in list:', selectedText);
+                console.log('Word already exists and is active:', selectedText);
+                return;
             }
+
+            chrome.storage.sync.set({ wordList }, () => {
+                if (chrome.runtime.lastError) {
+                    console.error('Error saving word list:', chrome.runtime.lastError);
+                    return;
+                }
+                console.log('Successfully saved word list:', wordList);
+                highlightWords(wordList);
+            });
         });
     };
 

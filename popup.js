@@ -57,13 +57,24 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Update existing words and add new ones
             const updatedList = newWords.map(word => {
-                const existing = wordList.find(item => item.word === word);
+                const existing = wordList.find(item => 
+                    item.word.toLowerCase() === word.toLowerCase()
+                );
                 if (existing) {
+                    // If word exists but was deleted, reactivate it
+                    if (existing.del_flag) {
+                        return {
+                            ...existing,
+                            del_flag: false,
+                            star: 0,
+                            update_time: new Date().toISOString()
+                        };
+                    }
                     return existing;
                 }
                 return {
                     word: word,
-                    user_id: 1, // You'll need to get this from your auth system
+                    user_id: 1,
                     star: 0,
                     create_time: new Date().toISOString(),
                     update_time: new Date().toISOString(),
@@ -71,7 +82,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
             });
 
-            chrome.storage.sync.set({ wordList: updatedList }, () => {
+            // Keep deleted words that aren't in the new list
+            const deletedWords = wordList.filter(item => 
+                item.del_flag && !newWords.some(word => 
+                    word.toLowerCase() === item.word.toLowerCase()
+                )
+            );
+
+            const finalList = [...updatedList, ...deletedWords];
+
+            chrome.storage.sync.set({ wordList: finalList }, () => {
                 if (chrome.runtime.lastError) {
                     console.error('Error saving words:', chrome.runtime.lastError);
                     return;
@@ -82,7 +102,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (tabs[0]) {
                         chrome.tabs.sendMessage(
                             tabs[0].id,
-                            { action: 'highlight', wordList: updatedList }
+                            { action: 'highlight', wordList: finalList }
                         );
                     }
                 });
@@ -129,8 +149,22 @@ document.addEventListener('DOMContentLoaded', () => {
             const serverResponse = await response.json();
             
             if (serverResponse.code === 200) {
-                // Update local storage with server's universal set
-                await chrome.storage.sync.set({ wordList: serverResponse.data });
+                // Merge server response with local deleted words
+                const localList = await chrome.storage.sync.get(['wordList']);
+                const localDeletedWords = (localList.wordList || [])
+                    .filter(item => item.del_flag);
+
+                // Combine server words with local deleted words
+                const mergedList = [
+                    ...serverResponse.data,
+                    ...localDeletedWords.filter(deletedWord => 
+                        !serverResponse.data.some(serverWord => 
+                            serverWord.word.toLowerCase() === deletedWord.word.toLowerCase()
+                        )
+                    )
+                ];
+
+                await chrome.storage.sync.set({ wordList: mergedList });
 
                 // Update textarea display
                 const activeWords = serverResponse.data
