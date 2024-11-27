@@ -58,13 +58,36 @@
         .back-link:hover {
             text-decoration: underline;
         }
+        .config-group {
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .config-group h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            color: #333;
+        }
+        textarea.config-input {
+            width: 100%;
+            height: 100px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-family: monospace;
+            resize: vertical;
+        }
     </style>
 </head>
 <body>
     <a href="popup.html" class="back-link">← Back to Word Highlighter</a>
     <h2>Configuration</h2>
 
-    <div class="config-section">
+    <!-- Sync URL Configuration -->
+    <div class="config-group">
+        <h3>Sync Settings</h3>
         <div class="config-item">
             <label for="syncUrl">Sync Server URL:</label>
             <div class="url-container">
@@ -73,6 +96,25 @@
             </div>
             <div id="urlStatus" class="status-message"></div>
         </div>
+    </div>
+
+    <!-- OpenAI Configuration -->
+    <div class="config-group">
+        <h3>OpenAI Settings</h3>
+        <div class="config-item">
+            <label for="openaiKey">API Key:</label>
+            <input type="password" id="openaiKey" placeholder="Enter your OpenAI API key">
+        </div>
+        <div class="config-item">
+            <label for="openaiBaseUrl">Base URL:</label>
+            <input type="text" id="openaiBaseUrl" placeholder="Enter OpenAI API base URL">
+        </div>
+        <div class="config-item">
+            <label for="openaiPrompt">Definition Prompt Template:</label>
+            <textarea id="openaiPrompt" class="config-input" placeholder="Enter prompt template. Use {word} as placeholder for the word"></textarea>
+        </div>
+        <button id="saveOpenAI">Save OpenAI Settings</button>
+        <div id="openaiStatus" class="status-message"></div>
     </div>
 
     <script src="config.js"></script>

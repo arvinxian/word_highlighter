@@ -65,6 +65,48 @@ function highlightWords(wordList) {
     });
 }
 
+// Add this function to fetch word definition
+async function fetchWordDefinition(word) {
+    try {
+        const config = await chrome.storage.sync.get([
+            'openaiKey',
+            'openaiBaseUrl',
+            'openaiPrompt'
+        ]);
+
+        if (!config.openaiKey || !config.openaiBaseUrl || !config.openaiPrompt) {
+            throw new Error('OpenAI configuration not found');
+        }
+
+        const prompt = config.openaiPrompt.replace('{word}', word);
+        
+        const response = await fetch(config.openaiBaseUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${config.openaiKey}`
+            },
+            body: JSON.stringify({
+                model: "gpt-4o-mini-2024-07-18",
+                messages: [{
+                    role: "user",
+                    content: prompt
+                }]
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return data.choices[0].message.content;
+    } catch (error) {
+        console.error('Error fetching definition:', error);
+        return `<p class="error">Error fetching definition: ${error.message}</p>`;
+    }
+}
+
 // Function to show popup for removing words
 function showRemoveWordPopup(wordId, rect) {
     // Remove any existing popup
@@ -73,12 +115,15 @@ function showRemoveWordPopup(wordId, rect) {
         existingPopup.remove();
     }
 
-    // Create popup element
+    // Create popup element with loading state
     const popup = document.createElement('div');
     popup.className = 'word-highlighter-popup word-highlighter-remove-popup';
     popup.innerHTML = `
         <div class="popup-content">
             <p>Remove "${wordId}" from highlight list?</p>
+            <div class="definition-container">
+                <p>Loading definition...</p>
+            </div>
             <button class="popup-btn" id="removeWordYes">Yes</button>
             <button class="popup-btn" id="removeWordNo">No</button>
         </div>
@@ -87,6 +132,15 @@ function showRemoveWordPopup(wordId, rect) {
     // Position popup near the word
     popup.style.left = `${rect.left}px`;
     popup.style.top = `${rect.bottom + 5}px`;
+
+    // Add to document and fetch definition
+    document.body.appendChild(popup);
+    
+    // Fetch and display definition
+    const definitionContainer = popup.querySelector('.definition-container');
+    fetchWordDefinition(wordId).then(definition => {
+        definitionContainer.innerHTML = definition;
+    });
 
     // Add event listeners
     document.body.appendChild(popup);

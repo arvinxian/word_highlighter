@@ -64,3 +64,23 @@
     background-color: #9e9e9e;
     color: white;
 }
+
+.word-highlighter-popup .definition-container {
+    margin: 10px 0;
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    padding: 10px;
+    border-radius: 4px;
+    background-color: #f9f9f9;
+    text-align: left;
+}
+
+.word-highlighter-popup .definition-container * {
+    text-align: left;
+}
+
+.word-highlighter-popup .error {
+    color: #f44336;
+    margin: 5px 0;
+}
