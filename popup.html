@@ -98,16 +98,11 @@
     </div>
     <div id="syncStatus" class="sync-status"></div>
 
-    <!-- Configuration Section -->
+    <!-- Settings Button -->
     <div class="config-section">
-        <div class="config-item">
-            <label for="syncUrl">Sync Server URL:</label>
-            <div style="display: flex; gap: 5px;">
-                <input type="text" id="syncUrl" placeholder="Enter server URL (e.g., http://localhost:8080/api/v1/stars/sync)">
-                <button id="saveSyncUrl" style="width: auto; padding: 5px 10px;">Save URL</button>
-            </div>
-            <div id="urlStatus" class="sync-status"></div>
-        </div>
+        <button id="configButton" class="config-button">
+            Open Settings
+        </button>
     </div>
 
     <script src="popup.js"></script>

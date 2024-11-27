@@ -11,6 +11,10 @@
   "action": {
     "default_popup": "popup.html"
   },
+  "web_accessible_resources": [{
+    "resources": ["config.html"],
+    "matches": ["<all_urls>"]
+  }],
   "content_scripts": [
     {
       "matches": ["<all_urls>"],

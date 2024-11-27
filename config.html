@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Word Highlighter Configuration</title>
+    <style>
+        body {
+            width: 400px;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        .config-section {
+            margin-bottom: 20px;
+        }
+        .config-item {
+            margin-bottom: 15px;
+        }
+        .config-item label {
+            display: block;
+            font-size: 14px;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        .config-item input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .url-container {
+            display: flex;
+            gap: 10px;
+        }
+        .url-container input {
+            flex: 1;
+        }
+        button {
+            padding: 8px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .status-message {
+            font-size: 12px;
+            margin-top: 5px;
+        }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #2196F3;
+            text-decoration: none;
+        }
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <a href="popup.html" class="back-link">← Back to Word Highlighter</a>
+    <h2>Configuration</h2>
+
+    <div class="config-section">
+        <div class="config-item">
+            <label for="syncUrl">Sync Server URL:</label>
+            <div class="url-container">
+                <input type="text" id="syncUrl" placeholder="Enter server URL (e.g., http://localhost:8080/api/v1/stars/sync)">
+                <button id="saveSyncUrl">Save</button>
+            </div>
+            <div id="urlStatus" class="status-message"></div>
+        </div>
+    </div>
+
+    <script src="config.js"></script>
+</body>
+</html> 

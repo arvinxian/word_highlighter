@@ -3,10 +3,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveButton = document.getElementById('saveButton');
     const syncButton = document.getElementById('syncButton');
     const syncStatus = document.getElementById('syncStatus');
-    const syncUrlInput = document.getElementById('syncUrl');
-    const saveSyncUrlButton = document.getElementById('saveSyncUrl');
-    const urlStatus = document.getElementById('urlStatus');
     const userNameSpan = document.getElementById('userName');
+    const configButton = document.getElementById('configButton');
 
     // Default sync URL
     const DEFAULT_SYNC_URL = 'http://localhost:8080/api/v1/stars/sync';
@@ -16,12 +14,9 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const result = await chrome.storage.sync.get(['wordList', 'wordSyncURL', 'wordUser']);
             
-            // Initialize sync URL if not set
+            // Set default sync URL if not set
             if (!result.wordSyncURL) {
                 await chrome.storage.sync.set({ wordSyncURL: DEFAULT_SYNC_URL });
-                syncUrlInput.value = DEFAULT_SYNC_URL;
-            } else {
-                syncUrlInput.value = result.wordSyncURL;
             }
 
             // Load user info
@@ -45,32 +40,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize configurations on popup load
     initializeConfigs();
 
-    // Handle sync URL save
-    saveSyncUrlButton.addEventListener('click', async () => {
-        const url = syncUrlInput.value.trim();
-        
-        if (!url) {
-            urlStatus.textContent = 'URL cannot be empty';
-            urlStatus.style.color = '#f44336';
-            return;
-        }
-
-        try {
-            // Validate URL format
-            new URL(url);
-            
-            await chrome.storage.sync.set({ wordSyncURL: url });
-            urlStatus.textContent = 'URL saved successfully';
-            urlStatus.style.color = '#4CAF50';
-        } catch (error) {
-            urlStatus.textContent = 'Invalid URL format';
-            urlStatus.style.color = '#f44336';
-        }
-
-        // Clear status message after 3 seconds
-        setTimeout(() => {
-            urlStatus.textContent = '';
-        }, 3000);
+    // Handle configuration button click
+    configButton.addEventListener('click', () => {
+        chrome.tabs.create({ url: 'config.html' });
     });
 
     // Save words and trigger highlighting
