@@ -42,7 +42,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Handle configuration button click
     configButton.addEventListener('click', () => {
-        chrome.tabs.create({ url: 'config.html' });
+        chrome.tabs.create({ url: 'config.html' }, () => {
+            window.close(); // Close the popup after opening config page
+        });
     });
 
     // Save words and trigger highlighting

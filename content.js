@@ -58,9 +58,20 @@ function highlightWords(wordList) {
 
     // Add hover event listeners to highlighted words
     document.querySelectorAll('.word-highlighter-highlight').forEach(element => {
+        let hoverTimer;
+
         element.addEventListener('mouseenter', (e) => {
-            const wordId = e.target.id;  // Get the word directly from the element's ID
-            showRemoveWordPopup(wordId, e.target.getBoundingClientRect());
+            chrome.storage.sync.get(['hoverDelay'], (result) => {
+                const delay = result.hoverDelay || 500; // Default to 500ms
+                hoverTimer = setTimeout(() => {
+                    const wordId = e.target.id;
+                    showRemoveWordPopup(wordId, e.target.getBoundingClientRect());
+                }, delay);
+            });
+        });
+
+        element.addEventListener('mouseleave', () => {
+            clearTimeout(hoverTimer);
         });
     });
 }
