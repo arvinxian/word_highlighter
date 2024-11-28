@@ -84,3 +84,31 @@
     color: #f44336;
     margin: 5px 0;
 }
+
+/* Heart symbol styles */
+.heart-container {
+    display: flex;
+    gap: 5px;
+    justify-content: center;
+    margin-bottom: 10px;
+}
+
+.heart {
+    cursor: pointer;
+    font-size: 20px;
+    color: #8c3145;
+    user-select: none;
+}
+
+.heart.filled::after {
+    content: "♥";
+}
+
+.heart.hollow::after {
+    content: "♡";
+}
+
+.heart:hover {
+    transform: scale(1.1);
+    transition: transform 0.2s;
+}

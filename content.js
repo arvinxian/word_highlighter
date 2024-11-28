@@ -126,124 +126,189 @@ function showRemoveWordPopup(wordId, rect) {
         existingPopup.remove();
     }
 
-    // Create popup element with loading state
-    const popup = document.createElement('div');
-    popup.className = 'word-highlighter-popup word-highlighter-remove-popup';
-    popup.innerHTML = `
-        <div class="popup-content">
-            <p>Remove "${wordId}" from highlight list?</p>
-            <div class="definition-container">
-                <p>Loading definition...</p>
+    // Get current word data
+    chrome.storage.sync.get(['wordList'], (result) => {
+        const wordList = result.wordList || [];
+        const wordData = wordList.find(item => 
+            item.word.toLowerCase() === wordId.toLowerCase()
+        );
+        
+        if (!wordData) return;
+
+        // Create popup element with loading state
+        const popup = document.createElement('div');
+        popup.className = 'word-highlighter-popup word-highlighter-remove-popup';
+        popup.innerHTML = `
+            <div class="popup-content">
+                <div class="heart-container">
+                    ${createHeartSymbols(wordData.star)}
+                </div>
+                <p>Remove "${wordId}" from highlight list?</p>
+                <div class="definition-container">
+                    <p>Loading definition...</p>
+                </div>
+                <button class="popup-btn" id="removeWordYes">Yes</button>
+                <button class="popup-btn" id="removeWordNo">No</button>
             </div>
-            <button class="popup-btn" id="removeWordYes">Yes</button>
-            <button class="popup-btn" id="removeWordNo">No</button>
-        </div>
-    `;
+        `;
 
-    // Position popup near the word
-    popup.style.left = `${rect.left}px`;
-    popup.style.top = `${rect.bottom + 5}px`;
+        // Position popup near the word
+        popup.style.left = `${rect.left}px`;
+        popup.style.top = `${rect.bottom + 5}px`;
 
-    // Add to document and fetch definition
-    document.body.appendChild(popup);
-    
-    // Fetch and display definition
-    const definitionContainer = popup.querySelector('.definition-container');
-    fetchWordDefinition(wordId).then(definition => {
-        definitionContainer.innerHTML = definition;
-    });
+        // Add to document
+        document.body.appendChild(popup);
 
-    // Add event listeners
-    document.body.appendChild(popup);
-    
-    const yesButton = popup.querySelector('#removeWordYes');
-    const noButton = popup.querySelector('#removeWordNo');
+        // Add heart click handlers
+        setupHeartHandlers(popup, wordData, wordList);
 
-    let isOverPopup = false;
-    let isOverWord = true;  // Start as true since we're showing from word hover
-
-    const hidePopup = () => {
-        popup.remove();
-        // Remove the document click listener when popup is hidden
-        document.removeEventListener('click', handleOutsideClick);
-    };
-
-    // Handle clicks outside the popup
-    const handleOutsideClick = (e) => {
-        const clickedElement = e.target;
-        // Check if click is outside both the popup and the highlighted word
-        if (!popup.contains(clickedElement) && clickedElement.id !== wordId) {
-            hidePopup();
-        }
-    };
-
-    // Add document click listener
-    document.addEventListener('click', handleOutsideClick);
-
-    // Track mouse entering/leaving the popup
-    popup.addEventListener('mouseenter', () => {
-        isOverPopup = true;
-    });
-
-    popup.addEventListener('mouseleave', () => {
-        isOverPopup = false;
-    });
-
-    // Track mouse leaving the word
-    const wordElement = document.getElementById(wordId);
-    if (wordElement) {
-        wordElement.addEventListener('mouseleave', () => {
-            isOverWord = false;
+        // Fetch and display definition
+        const definitionContainer = popup.querySelector('.definition-container');
+        fetchWordDefinition(wordId).then(definition => {
+            definitionContainer.innerHTML = definition;
         });
-    }
 
-    yesButton.addEventListener('click', () => {
-        chrome.storage.sync.get(['wordList'], (result) => {
-            const wordList = result.wordList || [];
-            const updatedList = wordList.map(item => {
-                if (item.word.toLowerCase() === wordId) {
-                    return {
-                        ...item,
-                        del_flag: true,
-                        update_time: new Date().toISOString()
-                    };
-                }
-                return item;
-            });
-            
-            chrome.storage.sync.set({ wordList: updatedList }, () => {
-                if (chrome.runtime.lastError) {
-                    console.error('Error saving updated word list:', chrome.runtime.lastError);
-                    return;
-                }
-                console.log('Word removed from list:', wordId);
+        // Add event listeners
+        document.body.appendChild(popup);
+        
+        const yesButton = popup.querySelector('#removeWordYes');
+        const noButton = popup.querySelector('#removeWordNo');
 
-                // Find all elements with this word's highlight
-                const highlightedElements = document.querySelectorAll(`#${wordId}`);
-                highlightedElements.forEach(element => {
-                    // Get the parent span that wraps our highlighted word
-                    const parentSpan = element.parentElement;
-                    if (parentSpan && parentSpan.childNodes.length === 1) {
-                        // If this is the only highlighted word in the span, replace the span with just the text
-                        const textNode = document.createTextNode(element.textContent);
-                        parentSpan.parentNode.replaceChild(textNode, parentSpan);
-                    } else {
-                        // If there are other elements, just replace this highlight with its text
-                        const textNode = document.createTextNode(element.textContent);
-                        element.parentNode.replaceChild(textNode, element);
-                    }
-                });
+        let isOverPopup = false;
+        let isOverWord = true;  // Start as true since we're showing from word hover
 
-                // Refresh the highlighting for remaining words
-                highlightWords(updatedList);
+        const hidePopup = () => {
+            popup.remove();
+            // Remove the document click listener when popup is hidden
+            document.removeEventListener('click', handleOutsideClick);
+        };
+
+        // Handle clicks outside the popup
+        const handleOutsideClick = (e) => {
+            const clickedElement = e.target;
+            // Check if click is outside both the popup and the highlighted word
+            if (!popup.contains(clickedElement) && clickedElement.id !== wordId) {
                 hidePopup();
+            }
+        };
+
+        // Add document click listener
+        document.addEventListener('click', handleOutsideClick);
+
+        // Track mouse entering/leaving the popup
+        popup.addEventListener('mouseenter', () => {
+            isOverPopup = true;
+        });
+
+        popup.addEventListener('mouseleave', () => {
+            isOverPopup = false;
+        });
+
+        // Track mouse leaving the word
+        const wordElement = document.getElementById(wordId);
+        if (wordElement) {
+            wordElement.addEventListener('mouseleave', () => {
+                isOverWord = false;
+            });
+        }
+
+        yesButton.addEventListener('click', () => {
+            chrome.storage.sync.get(['wordList'], (result) => {
+                const wordList = result.wordList || [];
+                const updatedList = wordList.map(item => {
+                    if (item.word.toLowerCase() === wordId) {
+                        return {
+                            ...item,
+                            del_flag: true,
+                            update_time: new Date().toISOString()
+                        };
+                    }
+                    return item;
+                });
+                
+                chrome.storage.sync.set({ wordList: updatedList }, () => {
+                    if (chrome.runtime.lastError) {
+                        console.error('Error saving updated word list:', chrome.runtime.lastError);
+                        return;
+                    }
+                    console.log('Word removed from list:', wordId);
+
+                    // Find all elements with this word's highlight
+                    const highlightedElements = document.querySelectorAll(`#${wordId}`);
+                    highlightedElements.forEach(element => {
+                        // Get the parent span that wraps our highlighted word
+                        const parentSpan = element.parentElement;
+                        if (parentSpan && parentSpan.childNodes.length === 1) {
+                            // If this is the only highlighted word in the span, replace the span with just the text
+                            const textNode = document.createTextNode(element.textContent);
+                            parentSpan.parentNode.replaceChild(textNode, parentSpan);
+                        } else {
+                            // If there are other elements, just replace this highlight with its text
+                            const textNode = document.createTextNode(element.textContent);
+                            element.parentNode.replaceChild(textNode, element);
+                        }
+                    });
+
+                    // Refresh the highlighting for remaining words
+                    highlightWords(updatedList);
+                    hidePopup();
+                });
             });
         });
-    });
 
-    noButton.addEventListener('click', () => {
-        hidePopup();
+        noButton.addEventListener('click', () => {
+            hidePopup();
+        });
     });
+}
+
+// Create heart symbols HTML
+function createHeartSymbols(starCount) {
+    let html = '';
+    // Add filled hearts
+    for (let i = 0; i < starCount; i++) {
+        html += `<span class="heart filled" data-index="${i}"></span>`;
+    }
+    // Add hollow heart
+    html += `<span class="heart hollow"></span>`;
+    return html;
+}
+
+// Setup heart click handlers
+function setupHeartHandlers(popup, wordData, wordList) {
+    const heartContainer = popup.querySelector('.heart-container');
+
+    // Handle filled heart clicks (decrease star)
+    heartContainer.addEventListener('click', async (e) => {
+        const heart = e.target.closest('.heart');
+        if (!heart) return;
+
+        if (heart.classList.contains('filled')) {
+            // Decrease star count
+            const newStarCount = wordData.star - 1;
+            await updateStarCount(wordData, wordList, newStarCount);
+            heartContainer.innerHTML = createHeartSymbols(newStarCount);
+        } else if (heart.classList.contains('hollow')) {
+            // Increase star count
+            const newStarCount = wordData.star + 1;
+            await updateStarCount(wordData, wordList, newStarCount);
+            heartContainer.innerHTML = createHeartSymbols(newStarCount);
+        }
+    });
+}
+
+// Update star count in storage
+async function updateStarCount(wordData, wordList, newCount) {
+    try {
+        // Update the word data
+        wordData.star = newCount;
+        wordData.update_time = new Date().toISOString();
+
+        // Update storage
+        await chrome.storage.sync.set({ wordList });
+    } catch (error) {
+        console.error('Error updating star count:', error);
+    }
 }
 
 // Create and show popup
