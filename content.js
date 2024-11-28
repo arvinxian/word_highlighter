@@ -385,26 +385,47 @@ document.addEventListener('mouseup', (e) => {
     }
 });
 
+// Check if current site is ignored
+async function checkSiteStatus() {
+    try {
+        const { ignoredSites = [] } = await chrome.storage.sync.get('ignoredSites');
+        const currentSite = window.location.hostname;
+        return !ignoredSites.includes(currentSite);
+    } catch (error) {
+        console.error('Error checking site status:', error);
+        return true; // Default to enabled if error
+    }
+}
+
+// Remove all highlights from the page
+function removeAllHighlights() {
+    document.querySelectorAll('.word-highlighter-highlight').forEach(element => {
+        const textNode = document.createTextNode(element.textContent);
+        element.parentNode.replaceChild(textNode, element);
+    });
+}
+
 // Listen for messages from the popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     console.log('Received message:', request);
-    if (request.action === 'highlight') {
+    if (request.action === 'highlight' || request.action === 'enable') {
         // Remove all existing highlights first
-        document.querySelectorAll('.word-highlighter-highlight').forEach(element => {
-            const textNode = document.createTextNode(element.textContent);
-            element.parentNode.replaceChild(textNode, element);
-        });
-
+        removeAllHighlights();
+        
         // Apply new highlights
         highlightWords(request.wordList);
+        sendResponse({status: 'success'});
+    } else if (request.action === 'disable') {
+        removeAllHighlights();
         sendResponse({status: 'success'});
     }
 });
 
 // Get initial word list from storage and highlight
-chrome.storage.sync.get(['wordList'], (result) => {
+chrome.storage.sync.get(['wordList'], async (result) => {
     console.log('Initial word list:', result.wordList);
-    if (result.wordList) {
+    const isEnabled = await checkSiteStatus();
+    if (result.wordList && isEnabled) {
         highlightWords(result.wordList);
     }
 });

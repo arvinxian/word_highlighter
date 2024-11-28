@@ -5,6 +5,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const syncStatus = document.getElementById('syncStatus');
     const userNameSpan = document.getElementById('userName');
     const configButton = document.getElementById('configButton');
+    const enableSwitch = document.getElementById('enableSwitch');
+    let currentUrl = '';
 
     // Default sync URL
     const DEFAULT_SYNC_URL = 'http://localhost:8080/api/v1/stars/sync';
@@ -37,8 +39,57 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Initialize configurations on popup load
-    initializeConfigs();
+    // Get current tab URL
+    async function getCurrentTab() {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        return new URL(tab.url).hostname;
+    }
+
+    // Initialize switch state
+    async function initializeSwitch() {
+        try {
+            currentUrl = await getCurrentTab();
+            const { ignoredSites = [] } = await chrome.storage.sync.get('ignoredSites');
+            enableSwitch.checked = !ignoredSites.includes(currentUrl);
+        } catch (error) {
+            console.error('Error initializing switch:', error);
+        }
+    }
+
+    // Handle switch change
+    enableSwitch.addEventListener('change', async () => {
+        try {
+            const { ignoredSites = [] } = await chrome.storage.sync.get('ignoredSites');
+            const isEnabled = enableSwitch.checked;
+            
+            let updatedSites;
+            if (isEnabled) {
+                // Remove site from ignored list
+                updatedSites = ignoredSites.filter(site => site !== currentUrl);
+            } else {
+                // Add site to ignored list
+                updatedSites = [...ignoredSites, currentUrl];
+            }
+            
+            await chrome.storage.sync.set({ ignoredSites: updatedSites });
+            
+            // Get current tab and refresh it
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            chrome.tabs.reload(tab.id);
+            window.close(); // Close the popup after triggering refresh
+        } catch (error) {
+            console.error('Error updating ignored sites:', error);
+        }
+    });
+
+    // Initialize configurations and switch
+    async function initialize() {
+        await initializeConfigs();
+        await initializeSwitch();
+    }
+
+    // Initialize everything
+    initialize();
 
     // Handle configuration button click
     configButton.addEventListener('click', () => {
