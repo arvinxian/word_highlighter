@@ -102,14 +102,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Save words and trigger highlighting
-    saveButton.addEventListener('click', () => {
+    saveButton.addEventListener('click', async () => {
         const newWords = wordListTextarea.value
             .split('\n')
-            .map(line => line.replace(/\s*\(★\d+\)$/, '').trim()) // Remove star count from display
+            .map(line => line.replace(/\s*\(★\d+\)$/, '').trim())
             .filter(word => word.length > 0);
 
-        chrome.storage.sync.get(['wordList'], (result) => {
-            let wordList = result.wordList || [];
+        try {
+            const { wordList = [] } = await chrome.storage.sync.get(['wordList']);
             
             // Update existing words and add new ones
             const updatedList = newWords.map(word => {
@@ -117,7 +117,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     item.word.toLowerCase() === word.toLowerCase()
                 );
                 if (existing) {
-                    // If word exists but was deleted, reactivate it
                     if (existing.del_flag) {
                         return {
                             ...existing,
@@ -147,27 +146,45 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const finalList = [...updatedList, ...deletedWords];
 
-            chrome.storage.sync.set({ wordList: finalList }, () => {
-                if (chrome.runtime.lastError) {
-                    console.error('Error saving words:', chrome.runtime.lastError);
-                    return;
-                }
+            await chrome.storage.sync.set({ wordList: finalList });
+            chrome.runtime.sendMessage({ action: 'triggerSync' });  // Trigger sync through background script
 
-                // Send message to content script to highlight words
-                chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-                    if (tabs[0]) {
-                        chrome.tabs.sendMessage(
-                            tabs[0].id,
-                            { action: 'highlight', wordList: finalList }
-                        );
-                    }
-                });
-            });
-        });
+            // Send message to content script to highlight words
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            if (tab) {
+                chrome.tabs.sendMessage(
+                    tab.id,
+                    { action: 'highlight', wordList: finalList }
+                );
+            }
+        } catch (error) {
+            console.error('Error saving words:', error);
+        }
     });
 
     // Updated sync functionality
-    syncButton.addEventListener('click', async () => {
+    syncButton.addEventListener('click', () => syncWithServer(true));
+
+    // Initialize default user if not exists (for development)
+    chrome.storage.sync.get(['wordUser'], (result) => {
+        if (!result.wordUser) {
+            const defaultUser = {
+                id: 1,
+                name: "xy",
+                token: 3,
+                create_time: new Date().toISOString(),
+                update_time: new Date().toISOString(),
+                del_flag: false
+            };
+            chrome.storage.sync.set({ wordUser: defaultUser }, () => {
+                console.log('Default user initialized:', defaultUser);
+                userNameSpan.textContent = defaultUser.name;
+            });
+        }
+    });
+
+    // Utility function for synchronization
+    async function syncWithServer(showStatus = true) {
         try {
             // Get configurations
             const config = await chrome.storage.sync.get(['wordSyncURL', 'wordUser', 'wordList']);
@@ -180,8 +197,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error('User not configured');
             }
 
-            syncStatus.textContent = 'Syncing...';
-            syncButton.disabled = true;
+            if (showStatus) {
+                syncStatus.textContent = 'Syncing...';
+                syncButton.disabled = true;
+            }
 
             const currentList = config.wordList || [];
 
@@ -222,12 +241,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 await chrome.storage.sync.set({ wordList: mergedList });
 
-                // Update textarea display
-                const activeWords = serverResponse.data
-                    .filter(item => !item.del_flag)
-                    .map(item => `${item.word} (★${item.star})`)
-                    .join('\n');
-                wordListTextarea.value = activeWords;
+                // Update textarea display if showing status
+                if (showStatus) {
+                    const activeWords = serverResponse.data
+                        .filter(item => !item.del_flag)
+                        .map(item => `${item.word} (★${item.star})`)
+                        .join('\n');
+                    wordListTextarea.value = activeWords;
+                }
 
                 // Update all open tabs
                 const tabs = await chrome.tabs.query({});
@@ -235,46 +256,41 @@ document.addEventListener('DOMContentLoaded', () => {
                     try {
                         await chrome.tabs.sendMessage(tab.id, {
                             action: 'highlight',
-                            wordList: serverResponse.data
+                            wordList: mergedList
                         });
                     } catch (err) {
                         console.log(`Could not update tab ${tab.id}:`, err);
                     }
                 }
 
-                syncStatus.textContent = 'Sync completed successfully!';
-                syncStatus.style.color = '#4CAF50';
+                if (showStatus) {
+                    syncStatus.textContent = 'Sync completed successfully!';
+                    syncStatus.style.color = '#4CAF50';
+                }
             } else {
                 throw new Error(serverResponse.message || 'Sync failed');
             }
         } catch (error) {
             console.error('Sync error:', error);
-            syncStatus.textContent = `Sync failed: ${error.message}`;
-            syncStatus.style.color = '#f44336';
+            if (showStatus) {
+                syncStatus.textContent = `Sync failed: ${error.message}`;
+                syncStatus.style.color = '#f44336';
+            }
         } finally {
-            syncButton.disabled = false;
-            setTimeout(() => {
-                syncStatus.textContent = '';
-                syncStatus.style.color = '#666';
-            }, 3000);
+            if (showStatus) {
+                syncButton.disabled = false;
+                setTimeout(() => {
+                    syncStatus.textContent = '';
+                    syncStatus.style.color = '#666';
+                }, 3000);
+            }
         }
-    });
+    }
 
-    // Initialize default user if not exists (for development)
-    chrome.storage.sync.get(['wordUser'], (result) => {
-        if (!result.wordUser) {
-            const defaultUser = {
-                id: 1,
-                name: "xy",
-                token: 3,
-                create_time: new Date().toISOString(),
-                update_time: new Date().toISOString(),
-                del_flag: false
-            };
-            chrome.storage.sync.set({ wordUser: defaultUser }, () => {
-                console.log('Default user initialized:', defaultUser);
-                userNameSpan.textContent = defaultUser.name;
-            });
+    // Listen for sync triggers from content script
+    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+        if (request.action === 'triggerSync') {
+            syncWithServer(false);  // Sync without showing status
         }
     });
 });

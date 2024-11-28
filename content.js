@@ -226,6 +226,7 @@ function showRemoveWordPopup(wordId, rect) {
                         return {
                             ...item,
                             del_flag: true,
+                            star: 0,
                             update_time: new Date().toISOString()
                         };
                     }
@@ -254,6 +255,9 @@ function showRemoveWordPopup(wordId, rect) {
                             element.parentNode.replaceChild(textNode, element);
                         }
                     });
+
+                    // Trigger sync after removing word
+                    chrome.runtime.sendMessage({ action: 'triggerSync' });
 
                     // Refresh the highlighting for remaining words
                     highlightWords(updatedList);
@@ -312,6 +316,8 @@ async function updateStarCount(wordData, wordList, newCount) {
 
         // Update storage
         await chrome.storage.sync.set({ wordList });
+        // Trigger sync after updating star count
+        chrome.runtime.sendMessage({ action: 'triggerSync' });
     } catch (error) {
         console.error('Error updating star count:', error);
     }
@@ -386,6 +392,8 @@ function showAddWordPopup(selectedText, x, y) {
                     return;
                 }
                 console.log('Successfully saved word list:', wordList);
+                // Trigger sync after adding word
+                chrome.runtime.sendMessage({ action: 'triggerSync' });
                 highlightWords(wordList);
             });
         });
