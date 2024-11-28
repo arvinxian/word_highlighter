@@ -1,8 +1,30 @@
+// Global variable to track if extension is enabled for current site
+let isExtensionEnabled = true;
+
 // Global flag to prevent popup from showing while handling clicks
 let isHandlingClick = false;
 
+// Initialize extension state
+async function initializeExtensionState() {
+    isExtensionEnabled = await checkSiteStatus();
+}
+
+// Check if current site is ignored
+async function checkSiteStatus() {
+    try {
+        const { ignoredSites = [] } = await chrome.storage.sync.get('ignoredSites');
+        const currentSite = window.location.hostname;
+        return !ignoredSites.includes(currentSite);
+    } catch (error) {
+        console.error('Error checking site status:', error);
+        return true; // Default to enabled if error
+    }
+}
+
 // Function to highlight words in the page
 function highlightWords(wordList) {
+    if (!isExtensionEnabled) return; // Skip if extension is disabled
+
     console.log('Highlighting words:', wordList);
     // Create a regular expression from the word list
     const words = wordList
@@ -57,23 +79,7 @@ function highlightWords(wordList) {
     });
 
     // Add hover event listeners to highlighted words
-    document.querySelectorAll('.word-highlighter-highlight').forEach(element => {
-        let hoverTimer;
-
-        element.addEventListener('mouseenter', (e) => {
-            chrome.storage.sync.get(['hoverDelay'], (result) => {
-                const delay = result.hoverDelay || 500; // Default to 500ms
-                hoverTimer = setTimeout(() => {
-                    const wordId = e.target.id;
-                    showRemoveWordPopup(wordId, e.target.getBoundingClientRect());
-                }, delay);
-            });
-        });
-
-        element.addEventListener('mouseleave', () => {
-            clearTimeout(hoverTimer);
-        });
-    });
+    addHighlightListeners();
 }
 
 // Add this function to fetch word definition
@@ -432,6 +438,8 @@ document.addEventListener('mousedown', (e) => {
 
 // Listen for text selection
 document.addEventListener('mouseup', (e) => {
+    if (!isExtensionEnabled) return; // Skip if extension is disabled
+
     // Don't show popup if the mouseup was on the popup itself
     if (e.target.closest('.word-highlighter-popup')) {
         return;
@@ -474,6 +482,7 @@ function removeAllHighlights() {
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     console.log('Received message:', request);
     if (request.action === 'highlight' || request.action === 'enable') {
+        isExtensionEnabled = true;
         // Remove all existing highlights first
         removeAllHighlights();
         
@@ -481,6 +490,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         highlightWords(request.wordList);
         sendResponse({status: 'success'});
     } else if (request.action === 'disable') {
+        isExtensionEnabled = false;
         removeAllHighlights();
         sendResponse({status: 'success'});
     }
@@ -489,8 +499,31 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // Get initial word list from storage and highlight
 chrome.storage.sync.get(['wordList'], async (result) => {
     console.log('Initial word list:', result.wordList);
-    const isEnabled = await checkSiteStatus();
-    if (result.wordList && isEnabled) {
+    await initializeExtensionState();
+    if (result.wordList && isExtensionEnabled) {
         highlightWords(result.wordList);
     }
 });
+
+// Add hover event listeners to highlighted words
+function addHighlightListeners() {
+    if (!isExtensionEnabled) return; // Skip if extension is disabled
+
+    document.querySelectorAll('.word-highlighter-highlight').forEach(element => {
+        let hoverTimer;
+
+        element.addEventListener('mouseenter', (e) => {
+            chrome.storage.sync.get(['hoverDelay'], (result) => {
+                const delay = result.hoverDelay || 500;
+                hoverTimer = setTimeout(() => {
+                    const wordId = e.target.id;
+                    showRemoveWordPopup(wordId, e.target.getBoundingClientRect());
+                }, delay);
+            });
+        });
+
+        element.addEventListener('mouseleave', () => {
+            clearTimeout(hoverTimer);
+        });
+    });
+}

@@ -75,8 +75,11 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Get current tab and refresh it
             const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            await chrome.tabs.sendMessage(tab.id, {
+                action: isEnabled ? 'enable' : 'disable'
+            });
             chrome.tabs.reload(tab.id);
-            window.close(); // Close the popup after triggering refresh
+            window.close();
         } catch (error) {
             console.error('Error updating ignored sites:', error);
         }
