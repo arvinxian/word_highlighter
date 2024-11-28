@@ -501,6 +501,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         isExtensionEnabled = false;
         removeAllHighlights();
         sendResponse({status: 'success'});
+    } else if (request.action === 'updateStyles') {
+        updateHighlightStyles(request.styles);
+        sendResponse({status: 'success'});
     }
 });
 
@@ -535,3 +538,54 @@ function addHighlightListeners() {
         });
     });
 }
+
+// Add this function to update styles dynamically
+function updateHighlightStyles(styles) {
+    const styleElement = document.getElementById('word-highlighter-styles');
+    if (styleElement) {
+        styleElement.remove();
+    }
+
+    const css = `
+        .word-highlighter-highlight {
+            background-color: ${styles.highlightColor || '#ffff00'};
+            color: ${styles.fontColor || '#000000'};
+            border-radius: 2px;
+            padding: 0 2px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .word-highlighter-highlight:hover {
+            background-color: ${styles.highlightColor ? adjustColor(styles.highlightColor, -10) : '#ffeb3b'};
+        }
+    `;
+
+    const style = document.createElement('style');
+    style.id = 'word-highlighter-styles';
+    style.textContent = css;
+    document.head.appendChild(style);
+}
+
+// Helper function to adjust color brightness
+function adjustColor(color, percent) {
+    const num = parseInt(color.replace('#', ''), 16);
+    const amt = Math.round(2.55 * percent);
+    const R = (num >> 16) + amt;
+    const G = (num >> 8 & 0x00FF) + amt;
+    const B = (num & 0x0000FF) + amt;
+    return '#' + (
+        0x1000000 +
+        (R < 255 ? (R < 1 ? 0 : R) : 255) * 0x10000 +
+        (G < 255 ? (G < 1 ? 0 : G) : 255) * 0x100 +
+        (B < 255 ? (B < 1 ? 0 : B) : 255)
+    ).toString(16).slice(1);
+}
+
+// Initialize styles when content script loads
+chrome.storage.sync.get(['highlightColor', 'fontColor'], (result) => {
+    updateHighlightStyles({
+        highlightColor: result.highlightColor || '#ffff00',
+        fontColor: result.fontColor || '#000000'
+    });
+});

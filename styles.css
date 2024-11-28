@@ -1,5 +1,6 @@
 .word-highlighter-highlight {
-    background-color: yellow;
+    /* background-color: yellow; */
+    /* color: black; */
     border-radius: 2px;
     padding: 0 2px;
     cursor: pointer;

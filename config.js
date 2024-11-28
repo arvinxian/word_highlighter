@@ -15,6 +15,32 @@ document.addEventListener('DOMContentLoaded', () => {
     const DEFAULT_OPENAI_PROMPT = 'Please give me the English definitions of the word {word} in Oxford dictionary format, besides I want a list of other forms of this word which share the Original form. Return with the content formatted in pure HTML(which I use to embed to my web HTML elements). only return the HTML content without other redundant content. don\'t need \'```\' and \'html\' symbol.';
     const DEFAULT_HOVER_DELAY = 500;
 
+    // Add color preview functionality
+    function setupColorPicker(inputId, previewId) {
+        const input = document.getElementById(inputId);
+        const preview = document.getElementById(previewId);
+        
+        // Update preview color
+        function updatePreview() {
+            preview.style.backgroundColor = input.value;
+        }
+
+        // Initial preview
+        updatePreview();
+
+        // Update preview when color changes
+        input.addEventListener('input', updatePreview);
+
+        // Open color picker when clicking preview
+        preview.addEventListener('click', () => {
+            input.click();
+        });
+    }
+
+    // Setup both color pickers
+    setupColorPicker('highlightColor', 'highlightColorPreview');
+    setupColorPicker('fontColor', 'fontColorPreview');
+
     // Load current configuration
     async function loadConfig() {
         try {
@@ -23,7 +49,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 'openaiKey',
                 'openaiBaseUrl',
                 'openaiPrompt',
-                'hoverDelay'
+                'hoverDelay',
+                'highlightColor',
+                'fontColor'
             ]);
 
             syncUrlInput.value = result.wordSyncURL || DEFAULT_SYNC_URL;
@@ -31,6 +59,16 @@ document.addEventListener('DOMContentLoaded', () => {
             openaiBaseUrlInput.value = result.openaiBaseUrl || DEFAULT_OPENAI_BASE_URL;
             openaiPromptInput.value = result.openaiPrompt || DEFAULT_OPENAI_PROMPT;
             document.getElementById('hoverDelay').value = result.hoverDelay || DEFAULT_HOVER_DELAY;
+            
+            // Set color values and update previews
+            const highlightColor = document.getElementById('highlightColor');
+            const fontColor = document.getElementById('fontColor');
+            
+            highlightColor.value = result.highlightColor || '#ffff00';
+            fontColor.value = result.fontColor || '#000000';
+            
+            document.getElementById('highlightColorPreview').style.backgroundColor = highlightColor.value;
+            document.getElementById('fontColorPreview').style.backgroundColor = fontColor.value;
         } catch (error) {
             console.error('Error loading configuration:', error);
         }
@@ -104,6 +142,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Handle UI settings save
     document.getElementById('saveUISettings').addEventListener('click', async () => {
         const delay = parseInt(document.getElementById('hoverDelay').value);
+        const highlightColor = document.getElementById('highlightColor').value;
+        const fontColor = document.getElementById('fontColor').value;
         const uiStatus = document.getElementById('uiStatus');
 
         if (isNaN(delay) || delay < 0) {
@@ -112,7 +152,25 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        await chrome.storage.sync.set({ hoverDelay: delay });
+        await chrome.storage.sync.set({ 
+            hoverDelay: delay,
+            highlightColor: highlightColor,
+            fontColor: fontColor
+        });
+
+        // Notify all tabs to update their highlighting styles
+        const tabs = await chrome.tabs.query({});
+        for (const tab of tabs) {
+            try {
+                await chrome.tabs.sendMessage(tab.id, {
+                    action: 'updateStyles',
+                    styles: { highlightColor, fontColor }
+                });
+            } catch (err) {
+                console.log(`Could not update tab ${tab.id}:`, err);
+            }
+        }
+
         uiStatus.textContent = 'UI settings saved successfully';
         uiStatus.style.color = '#4CAF50';
 
