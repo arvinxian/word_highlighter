@@ -36,22 +36,28 @@ function highlightWords(wordList) {
     const walker = document.createTreeWalker(
         document.body,
         NodeFilter.SHOW_TEXT,
-        null,
+        {
+            acceptNode: function(node) {
+                // Skip if parent is script, style, already highlighted, or inside a highlight
+                if (
+                    node.parentElement.tagName === 'SCRIPT' ||
+                    node.parentElement.tagName === 'STYLE' ||
+                    node.parentElement.classList.contains('word-highlighter-highlight') ||
+                    node.parentElement.closest('.word-highlighter-highlight') ||
+                    // Skip if node is empty or only whitespace
+                    !node.textContent.trim()
+                ) {
+                    return NodeFilter.FILTER_REJECT;
+                }
+                return NodeFilter.FILTER_ACCEPT;
+            }
+        },
         false
     );
 
     const nodesToHighlight = [];
     let node;
     while (node = walker.nextNode()) {
-        // Skip if parent is script, style, or already highlighted
-        if (
-            node.parentElement.tagName === 'SCRIPT' ||
-            node.parentElement.tagName === 'STYLE' ||
-            node.parentElement.classList.contains('word-highlighter-highlight')
-        ) {
-            continue;
-        }
-
         if (regex.test(node.textContent)) {
             nodesToHighlight.push(node);
         }
@@ -548,16 +554,25 @@ function updateHighlightStyles(styles) {
 
     const css = `
         .word-highlighter-highlight {
-            background-color: ${styles.highlightColor || '#ffff00'};
-            color: ${styles.fontColor || '#000000'};
+            background-color: ${styles.highlightColor || '#ffff00'} !important;
+            color: ${styles.fontColor || '#000000'} !important;
             border-radius: 2px;
             padding: 0 2px;
             cursor: pointer;
             transition: background-color 0.2s;
+            mix-blend-mode: multiply;
+        }
+
+        /* Special handling for PDF.js viewer */
+        .pdfViewer .word-highlighter-highlight {
+            background-color: ${styles.highlightColor || '#ffff00'} !important;
+            color: ${styles.fontColor || '#000000'} !important;
+            opacity: 1 !important;
+            mix-blend-mode: multiply;
         }
 
         .word-highlighter-highlight:hover {
-            background-color: ${styles.highlightColor ? adjustColor(styles.highlightColor, -10) : '#ffeb3b'};
+            background-color: ${styles.highlightColor ? adjustColor(styles.highlightColor, -10) : '#ffeb3b'} !important;
         }
     `;
 
@@ -588,4 +603,38 @@ chrome.storage.sync.get(['highlightColor', 'fontColor'], (result) => {
         highlightColor: result.highlightColor || '#ffff00',
         fontColor: result.fontColor || '#000000'
     });
+});
+
+// Add a mutation observer to handle dynamically loaded PDF content
+let observerTimeout = null;
+const observer = new MutationObserver((mutations) => {
+    // Clear any existing timeout
+    if (observerTimeout) {
+        clearTimeout(observerTimeout);
+    }
+
+    // Set a new timeout to debounce the highlighting
+    observerTimeout = setTimeout(() => {
+        // Check if we're in a PDF viewer
+        if (window.location.href.includes('pdf.js/web/viewer.html')) {
+            chrome.storage.sync.get(['wordList'], (result) => {
+                if (result.wordList && isExtensionEnabled) {
+                    highlightWords(result.wordList);
+                }
+            });
+        }
+    }, 1000); // Wait for 1 second after changes stop
+});
+
+// Start observing if we're in a PDF viewer
+if (window.location.href.includes('pdf.js/web/viewer.html')) {
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+}
+
+// Clean up observer when page is unloaded
+window.addEventListener('unload', () => {
+    observer.disconnect();
 });
