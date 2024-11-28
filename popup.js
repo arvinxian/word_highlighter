@@ -25,15 +25,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (result.wordUser) {
                 userNameSpan.textContent = result.wordUser.name;
             }
-
-            // Load word list
-            if (result.wordList) {
-                const activeWords = result.wordList
-                    .filter(item => !item.del_flag)
-                    .map(item => `${item.word} (★${item.star})`)
-                    .join('\n');
-                wordListTextarea.value = activeWords;
-            }
         } catch (error) {
             console.error('Error initializing configurations:', error);
         }
@@ -99,67 +90,6 @@ document.addEventListener('DOMContentLoaded', () => {
         chrome.tabs.create({ url: 'config.html' }, () => {
             window.close(); // Close the popup after opening config page
         });
-    });
-
-    // Save words and trigger highlighting
-    saveButton.addEventListener('click', async () => {
-        const newWords = wordListTextarea.value
-            .split('\n')
-            .map(line => line.replace(/\s*\(★\d+\)$/, '').trim())
-            .filter(word => word.length > 0);
-
-        try {
-            const { wordList = [] } = await chrome.storage.sync.get(['wordList']);
-            
-            // Update existing words and add new ones
-            const updatedList = newWords.map(word => {
-                const existing = wordList.find(item => 
-                    item.word.toLowerCase() === word.toLowerCase()
-                );
-                if (existing) {
-                    if (existing.del_flag) {
-                        return {
-                            ...existing,
-                            del_flag: false,
-                            star: 0,
-                            update_time: new Date().toISOString()
-                        };
-                    }
-                    return existing;
-                }
-                return {
-                    word: word,
-                    user_id: 1,
-                    star: 0,
-                    create_time: new Date().toISOString(),
-                    update_time: new Date().toISOString(),
-                    del_flag: false
-                };
-            });
-
-            // Keep deleted words that aren't in the new list
-            const deletedWords = wordList.filter(item => 
-                item.del_flag && !newWords.some(word => 
-                    word.toLowerCase() === item.word.toLowerCase()
-                )
-            );
-
-            const finalList = [...updatedList, ...deletedWords];
-
-            await chrome.storage.sync.set({ wordList: finalList });
-            chrome.runtime.sendMessage({ action: 'triggerSync' });  // Trigger sync through background script
-
-            // Send message to content script to highlight words
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            if (tab) {
-                chrome.tabs.sendMessage(
-                    tab.id,
-                    { action: 'highlight', wordList: finalList }
-                );
-            }
-        } catch (error) {
-            console.error('Error saving words:', error);
-        }
     });
 
     // Updated sync functionality
