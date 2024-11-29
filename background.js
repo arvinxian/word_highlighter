@@ -2,9 +2,14 @@
 async function syncWithServer() {
     try {
         // Get configurations
-        const config = await chrome.storage.sync.get(['wordSyncURL', 'wordUser', 'wordList']);
+        const config = await chrome.storage.sync.get(['wordSyncURL', 'wordUser', 'wordList', 'syncEnabled']);
         
         // Validate configuration
+        if (!config.syncEnabled) {
+            console.log('Sync is disabled');
+            return;
+        }
+        
         if (!config.wordSyncURL || !config.wordUser) {
             console.log('Sync configuration not complete');
             return;

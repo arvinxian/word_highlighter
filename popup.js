@@ -1,5 +1,4 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const wordListTextarea = document.getElementById('wordList');
     const saveButton = document.getElementById('saveButton');
     const syncButton = document.getElementById('syncButton');
     const syncStatus = document.getElementById('syncStatus');
@@ -93,7 +92,19 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Updated sync functionality
-    syncButton.addEventListener('click', () => syncWithServer(true));
+    syncButton.addEventListener('click', async () => {
+        const { syncEnabled } = await chrome.storage.sync.get('syncEnabled');
+        if (!syncEnabled) {
+            syncStatus.textContent = 'Sync is disabled. Enable it in settings.';
+            syncStatus.style.color = '#f44336';
+            setTimeout(() => {
+                syncStatus.textContent = '';
+                syncStatus.style.color = '#666';
+            }, 3000);
+            return;
+        }
+        syncWithServer(true);
+    });
 
     // Initialize default user if not exists (for development)
     chrome.storage.sync.get(['wordUser'], (result) => {
@@ -170,15 +181,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 ];
 
                 await chrome.storage.sync.set({ wordList: mergedList });
-
-                // Update textarea display if showing status
-                if (showStatus) {
-                    const activeWords = serverResponse.data
-                        .filter(item => !item.del_flag)
-                        .map(item => `${item.word} (★${item.star})`)
-                        .join('\n');
-                    wordListTextarea.value = activeWords;
-                }
 
                 // Update all open tabs
                 const tabs = await chrome.tabs.query({});
