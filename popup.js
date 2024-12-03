@@ -13,12 +13,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize and load configurations
     async function initializeConfigs() {
         try {
-            const result = await chrome.storage.sync.get(['wordList', 'wordSyncURL', 'wordUser']);
+            const result = await chrome.storage.sync.get(['wordSyncURL', 'wordUser', 'syncEnabled']);
             
-            // Set default sync URL if not set
-            if (!result.wordSyncURL) {
-                await chrome.storage.sync.set({ wordSyncURL: DEFAULT_SYNC_URL });
-            }
+            // Initialize sync configuration if not set
+            const defaults = {
+                wordSyncURL: result.wordSyncURL || DEFAULT_SYNC_URL,
+                syncEnabled: result.syncEnabled || false
+            };
+            
+            await chrome.storage.sync.set(defaults);
+            console.log('Initialized sync configuration:', defaults);  // Debug log
 
             // Load user info
             if (result.wordUser) {
@@ -93,8 +97,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Updated sync functionality
     syncButton.addEventListener('click', async () => {
-        const { syncEnabled } = await chrome.storage.sync.get('syncEnabled');
-        if (!syncEnabled) {
+        // Get all required sync configurations
+        const config = await chrome.storage.sync.get(['syncEnabled', 'wordSyncURL', 'wordUser']);
+        console.log('Sync config:', {
+            syncEnabled: config.syncEnabled,
+            wordSyncURL: config.wordSyncURL,
+            hasUser: !!config.wordUser,
+            userDetails: config.wordUser
+        });
+        
+        if (!config.wordSyncURL) {
+            console.warn('No sync URL found in config');
+        }
+
+        if (!config.syncEnabled) {
             syncStatus.textContent = 'Sync is disabled. Enable it in settings.';
             syncStatus.style.color = '#f44336';
             setTimeout(() => {
@@ -103,7 +119,38 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 3000);
             return;
         }
-        syncWithServer(true);
+
+        // Validate sync configuration
+        if (!config.wordSyncURL || !config.wordUser) {
+            syncStatus.textContent = 'Sync configuration incomplete. Please check settings.';
+            syncStatus.style.color = '#f44336';
+            setTimeout(() => {
+                syncStatus.textContent = '';
+                syncStatus.style.color = '#666';
+            }, 3000);
+            return;
+        }
+
+        // Get word list from local storage
+        const { wordList } = await chrome.storage.local.get(['wordList']);
+        
+        console.log('Passing to syncWithServer:', {
+            wordSyncURL: config.wordSyncURL,
+            hasUser: !!config.wordUser,
+            wordListLength: wordList ? wordList.length : 0
+        });
+
+        // Trigger sync with local data
+        try {
+            await syncWithServer(true);
+        } catch (error) {
+            console.error('Error during sync:', error);
+            console.error('Sync error details:', {
+                hasURL: !!config.wordSyncURL,
+                hasUser: !!config.wordUser,
+                errorMessage: error.message
+            });
+        }
     });
 
     // Initialize default user if not exists (for development)
@@ -128,13 +175,18 @@ document.addEventListener('DOMContentLoaded', () => {
     async function syncWithServer(showStatus = true) {
         try {
             // Get configurations
-            const config = await chrome.storage.sync.get(['wordSyncURL', 'wordUser', 'wordList']);
+            const [syncConfig, localData] = await Promise.all([
+                chrome.storage.sync.get(['wordSyncURL', 'wordUser', 'syncEnabled']),
+                chrome.storage.local.get(['wordList'])
+            ]);
             
             // Validate configuration
-            if (!config.wordSyncURL) {
+            if (!syncConfig.wordSyncURL) {
+                console.error('Missing wordSyncURL in config:', syncConfig);
                 throw new Error('Sync URL not configured');
             }
-            if (!config.wordUser) {
+            if (!syncConfig.wordUser) {
+                console.error('Missing wordUser in config:', syncConfig);
                 throw new Error('User not configured');
             }
 
@@ -143,15 +195,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 syncButton.disabled = true;
             }
 
-            const currentList = config.wordList || [];
+            const currentList = localData.wordList || [];
 
             // Send sync request to configured server
-            const response = await fetch(config.wordSyncURL, {
+            const response = await fetch(syncConfig.wordSyncURL, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'User-Id': config.wordUser.id.toString(),
-                    'User-Name': config.wordUser.name
+                    'User-Id': syncConfig.wordUser.id.toString(),
+                    'User-Name': syncConfig.wordUser.name
                 },
                 body: JSON.stringify({
                     data: currentList
@@ -166,7 +218,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (serverResponse.code === 200) {
                 // Merge server response with local deleted words
-                const localList = await chrome.storage.sync.get(['wordList']);
+                const localList = await chrome.storage.local.get(['wordList']);
                 const localDeletedWords = (localList.wordList || [])
                     .filter(item => item.del_flag);
 
@@ -180,18 +232,29 @@ document.addEventListener('DOMContentLoaded', () => {
                     )
                 ];
 
-                await chrome.storage.sync.set({ wordList: mergedList });
+                await chrome.storage.local.set({ wordList: mergedList });
 
                 // Update all open tabs
                 const tabs = await chrome.tabs.query({});
                 for (const tab of tabs) {
                     try {
+                        // Skip chrome:// pages, extension pages, and other restricted URLs
+                        if (!tab.url || 
+                            tab.url.startsWith('chrome://') || 
+                            tab.url.startsWith('chrome-extension://') ||
+                            tab.url.startsWith('about:') ||
+                            tab.url.startsWith('edge://')) {
+                            continue;
+                        }
                         await chrome.tabs.sendMessage(tab.id, {
                             action: 'highlight',
                             wordList: mergedList
                         });
                     } catch (err) {
-                        console.log(`Could not update tab ${tab.id}:`, err);
+                        // Only log if it's not a connection error
+                        if (!err.message.includes('Receiving end does not exist')) {
+                            console.log(`Could not update tab ${tab.id}:`, err);
+                        }
                     }
                 }
 
@@ -219,10 +282,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Listen for sync triggers from content script
+    // Listen for sync triggers from content script or background
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (request.action === 'triggerSync') {
-            syncWithServer(false);  // Sync without showing status
+            syncWithServer(false);  // Single point of sync
         }
     });
 });

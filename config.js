@@ -169,12 +169,23 @@ document.addEventListener('DOMContentLoaded', () => {
         const tabs = await chrome.tabs.query({});
         for (const tab of tabs) {
             try {
+                // Skip chrome:// pages, extension pages, and other restricted URLs
+                if (!tab.url || 
+                    tab.url.startsWith('chrome://') || 
+                    tab.url.startsWith('chrome-extension://') ||
+                    tab.url.startsWith('about:') ||
+                    tab.url.startsWith('edge://')) {
+                    continue;
+                }
                 await chrome.tabs.sendMessage(tab.id, {
                     action: 'updateStyles',
                     styles: { highlightColor, fontColor }
                 });
             } catch (err) {
-                console.log(`Could not update tab ${tab.id}:`, err);
+                // Only log if it's not a connection error
+                if (!err.message.includes('Receiving end does not exist')) {
+                    console.log(`Could not update tab ${tab.id}:`, err);
+                }
             }
         }
 

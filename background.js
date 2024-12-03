@@ -1,81 +1,7 @@
-// Utility function for synchronization
-async function syncWithServer() {
-    try {
-        // Get configurations
-        const config = await chrome.storage.sync.get(['wordSyncURL', 'wordUser', 'wordList', 'syncEnabled']);
-        
-        // Validate configuration
-        if (!config.syncEnabled) {
-            console.log('Sync is disabled');
-            return;
-        }
-        
-        if (!config.wordSyncURL || !config.wordUser) {
-            console.log('Sync configuration not complete');
-            return;
-        }
-
-        const currentList = config.wordList || [];
-
-        // Send sync request to configured server
-        const response = await fetch(config.wordSyncURL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'User-Id': config.wordUser.id.toString(),
-                'User-Name': config.wordUser.name
-            },
-            body: JSON.stringify({
-                data: currentList
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const serverResponse = await response.json();
-        
-        if (serverResponse.code === 200) {
-            // Merge server response with local deleted words
-            const localList = await chrome.storage.sync.get(['wordList']);
-            const localDeletedWords = (localList.wordList || [])
-                .filter(item => item.del_flag);
-
-            // Combine server words with local deleted words
-            const mergedList = [
-                ...serverResponse.data,
-                ...localDeletedWords.filter(deletedWord => 
-                    !serverResponse.data.some(serverWord => 
-                        serverWord.word.toLowerCase() === deletedWord.word.toLowerCase()
-                    )
-                )
-            ];
-
-            await chrome.storage.sync.set({ wordList: mergedList });
-
-            // Update all open tabs
-            const tabs = await chrome.tabs.query({});
-            for (const tab of tabs) {
-                try {
-                    await chrome.tabs.sendMessage(tab.id, {
-                        action: 'highlight',
-                        wordList: mergedList
-                    });
-                } catch (err) {
-                    console.log(`Could not update tab ${tab.id}:`, err);
-                }
-            }
-        }
-    } catch (error) {
-        console.error('Sync error:', error);
-    }
-}
-
 // Listen for sync triggers from content script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'triggerSync') {
-        syncWithServer();
+        // Do nothing here, let popup.js handle sync
     }
 });
 
@@ -127,8 +53,8 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
                     // Save updated list
                     chrome.storage.sync.set({ wordList }, () => {
                         console.log('Updated word list saved:', wordList);
-                        // Trigger sync after adding word
-                        syncWithServer();
+                        // Instead, send message to trigger sync
+                        chrome.runtime.sendMessage({ action: 'triggerSync' });
                         // Notify content script to update highlighting
                         chrome.tabs.sendMessage(tab.id, {
                             action: 'highlight',

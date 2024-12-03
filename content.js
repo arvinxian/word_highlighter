@@ -28,8 +28,13 @@ function highlightWords(wordList) {
     console.log('Highlighting words:', wordList);
     // Create a regular expression from the word list
     const words = wordList
+        .filter(item => item && typeof item === 'object')
         .filter(item => !item.del_flag)
-        .map(item => item.word);
+        .map(item => item.word)
+        .filter(word => word && typeof word === 'string');
+    
+    if (words.length === 0) return;
+    
     const regex = new RegExp(`\\b(${words.join('|')})\\b`, 'gi');
 
     // Walk through all text nodes in the document
@@ -73,11 +78,16 @@ function highlightWords(wordList) {
                 const wordObj = wordList.find(item => 
                     item.word.toLowerCase() === match.toLowerCase()
                 );
+                // Safety check: if word object not found or invalid, return original text
+                if (!wordObj || typeof wordObj !== 'object') {
+                    console.warn('Word object not found for:', match);
+                    return match;
+                }
                 return `<span 
                     class="word-highlighter-highlight" 
                     id="${match.toLowerCase()}"
-                    data-star="${wordObj.star}"
-                    data-user-id="${wordObj.user_id}"
+                    data-star="${wordObj.star || 0}"
+                    data-user-id="${wordObj.user_id || 0}"
                 >${match}</span>`;
             }
         );
@@ -139,7 +149,7 @@ function showRemoveWordPopup(wordId, rect) {
     }
 
     // Get current word data
-    chrome.storage.sync.get(['wordList'], (result) => {
+    chrome.storage.local.get(['wordList'], (result) => {
         const wordList = result.wordList || [];
         const wordData = wordList.find(item => 
             item.word.toLowerCase() === wordId.toLowerCase()
@@ -225,7 +235,7 @@ function showRemoveWordPopup(wordId, rect) {
         }
 
         yesButton.addEventListener('click', () => {
-            chrome.storage.sync.get(['wordList'], (result) => {
+            chrome.storage.local.get(['wordList'], (result) => {
                 const wordList = result.wordList || [];
                 const updatedList = wordList.map(item => {
                     if (item.word.toLowerCase() === wordId) {
@@ -239,7 +249,7 @@ function showRemoveWordPopup(wordId, rect) {
                     return item;
                 });
                 
-                chrome.storage.sync.set({ wordList: updatedList }, () => {
+                chrome.storage.local.set({ wordList: updatedList }, () => {
                     if (chrome.runtime.lastError) {
                         console.error('Error saving updated word list:', chrome.runtime.lastError);
                         return;
@@ -321,7 +331,7 @@ async function updateStarCount(wordData, wordList, newCount) {
         wordData.update_time = new Date().toISOString();
 
         // Update storage
-        await chrome.storage.sync.set({ wordList });
+        await chrome.storage.local.set({ wordList });
         // Trigger sync after updating star count
         chrome.runtime.sendMessage({ action: 'triggerSync' });
     } catch (error) {
@@ -357,12 +367,12 @@ function showAddWordPopup(selectedText, x, y) {
     const handleAddWord = () => {
         console.log('User clicked Yes to add word:', selectedText);
         
-        if (!chrome.storage || !chrome.storage.sync) {
+        if (!chrome.storage || !chrome.storage.local) {
             console.error('Chrome storage API is not available');
             return;
         }
 
-        chrome.storage.sync.get(['wordList'], (result) => {
+        chrome.storage.local.get(['wordList'], (result) => {
             console.log('Retrieved current word list:', result);
             const wordList = result.wordList || [];
             console.log('Parsed word list:', wordList);
@@ -392,7 +402,7 @@ function showAddWordPopup(selectedText, x, y) {
                 return;
             }
 
-            chrome.storage.sync.set({ wordList }, () => {
+            chrome.storage.local.set({ wordList }, () => {
                 if (chrome.runtime.lastError) {
                     console.error('Error saving word list:', chrome.runtime.lastError);
                     return;
@@ -514,7 +524,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 // Get initial word list from storage and highlight
-chrome.storage.sync.get(['wordList'], async (result) => {
+chrome.storage.local.get(['wordList'], async (result) => {
     console.log('Initial word list:', result.wordList);
     await initializeExtensionState();
     if (result.wordList && isExtensionEnabled) {
