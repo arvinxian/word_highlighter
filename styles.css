@@ -30,6 +30,7 @@
     margin: 0 0 10px 0;
     font-family: Arial, sans-serif;
     font-size: 14px;
+    color: #333 !important;
 }
 
 .word-highlighter-popup .popup-btn {
@@ -44,12 +45,12 @@
 
 .word-highlighter-popup #addWordYes {
     background-color: #4CAF50;
-    color: white;
+    color: white !important;
 }
 
 .word-highlighter-popup #addWordNo {
     background-color: #f44336;
-    color: white;
+    color: white !important;
 }
 
 .word-highlighter-remove-popup {
@@ -58,12 +59,12 @@
 
 .word-highlighter-remove-popup #removeWordYes {
     background-color: #f44336;
-    color: white;
+    color: white !important;
 }
 
 .word-highlighter-remove-popup #removeWordNo {
     background-color: #9e9e9e;
-    color: white;
+    color: white !important;
 }
 
 .word-highlighter-popup .definition-container {
@@ -75,6 +76,7 @@
     border-radius: 4px;
     background-color: #f9f9f9;
     text-align: left;
+    color: #333 !important;
 }
 
 .word-highlighter-popup .definition-container * {
@@ -82,7 +84,7 @@
 }
 
 .word-highlighter-popup .error {
-    color: #f44336;
+    color: #f44336 !important;
     margin: 5px 0;
 }
 
