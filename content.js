@@ -190,9 +190,6 @@ function showRemoveWordPopup(wordId, rect) {
             definitionContainer.innerHTML = definition;
         });
 
-        // Add event listeners
-        document.body.appendChild(popup);
-        
         const yesButton = popup.querySelector('#removeWordYes');
         const noButton = popup.querySelector('#removeWordNo');
 
