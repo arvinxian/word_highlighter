@@ -560,7 +560,7 @@ function updateHighlightStyles(styles) {
             padding: 0 2px;
             cursor: pointer;
             transition: background-color 0.2s;
-            mix-blend-mode: multiply;
+            mix-blend-mode: normal !important;
         }
 
         /* Special handling for PDF.js viewer */
@@ -568,7 +568,7 @@ function updateHighlightStyles(styles) {
             background-color: ${styles.highlightColor || '#ffff00'} !important;
             color: ${styles.fontColor || '#000000'} !important;
             opacity: 1 !important;
-            mix-blend-mode: multiply;
+            mix-blend-mode: normal !important;
         }
 
         .word-highlighter-highlight:hover {
@@ -581,7 +581,6 @@ function updateHighlightStyles(styles) {
     style.textContent = css;
     document.head.appendChild(style);
 }
-
 // Helper function to adjust color brightness
 function adjustColor(color, percent) {
     const num = parseInt(color.replace('#', ''), 16);
@@ -638,3 +637,4 @@ if (window.location.href.includes('pdf.js/web/viewer.html')) {
 window.addEventListener('unload', () => {
     observer.disconnect();
 });
+
