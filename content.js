@@ -23,7 +23,7 @@ async function checkSiteStatus() {
 
 // Function to highlight words in the page
 function highlightWords(wordList) {
-    if (!isExtensionEnabled) return; // Skip if extension is disabled
+    if (!isExtensionEnabled) return;
 
     console.log('Highlighting words:', wordList);
     // Create a regular expression from the word list
@@ -35,7 +35,9 @@ function highlightWords(wordList) {
     
     if (words.length === 0) return;
     
-    const regex = new RegExp(`\\b(${words.join('|')})\\b`, 'gi');
+    // Create regex pattern with word boundaries and escape special characters
+    const escapedWords = words.map(word => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const regex = new RegExp(`\\b(${escapedWords.join('|')})\\b`, 'gi');
 
     // Walk through all text nodes in the document
     const walker = document.createTreeWalker(
@@ -47,6 +49,8 @@ function highlightWords(wordList) {
                 if (
                     node.parentElement.tagName === 'SCRIPT' ||
                     node.parentElement.tagName === 'STYLE' ||
+                    node.parentElement.tagName === 'TEXTAREA' ||
+                    node.parentElement.tagName === 'INPUT' ||
                     node.parentElement.classList.contains('word-highlighter-highlight') ||
                     node.parentElement.closest('.word-highlighter-highlight') ||
                     // Skip if node is empty or only whitespace
@@ -63,7 +67,11 @@ function highlightWords(wordList) {
     const nodesToHighlight = [];
     let node;
     while (node = walker.nextNode()) {
-        if (regex.test(node.textContent)) {
+        // Reset regex lastIndex before testing
+        regex.lastIndex = 0;
+        const text = node.textContent;
+        if (regex.test(text)) {
+            regex.lastIndex = 0;  // Reset again for future use
             nodesToHighlight.push(node);
         }
     }
@@ -72,6 +80,7 @@ function highlightWords(wordList) {
     // Process the nodes that need highlighting
     nodesToHighlight.forEach(node => {
         const span = document.createElement('span');
+        regex.lastIndex = 0;  // Reset regex state before replace
         span.innerHTML = node.textContent.replace(
             regex,
             match => {
