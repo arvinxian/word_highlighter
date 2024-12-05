@@ -338,6 +338,7 @@ async function updateStarCount(wordData, wordList, newCount) {
 
         // Update storage
         await chrome.storage.local.set({ wordList });
+        console.log('[Sync Debug] Triggering sync after star update for word:', wordData.word);
         // Trigger sync after updating star count
         chrome.runtime.sendMessage({ action: 'triggerSync' });
     } catch (error) {

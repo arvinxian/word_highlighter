@@ -174,110 +174,23 @@ document.addEventListener('DOMContentLoaded', () => {
     // Utility function for synchronization
     async function syncWithServer(showStatus = true) {
         try {
-            // Get configurations
-            const [syncConfig, localData] = await Promise.all([
-                chrome.storage.sync.get(['wordSyncURL', 'wordUser', 'syncEnabled']),
-                chrome.storage.local.get(['wordList'])
-            ]);
+            console.log('[Sync Debug] Starting sync operation from popup');
+            // Delegate sync to background script
+            chrome.runtime.sendMessage({ action: 'triggerSync' });
             
-            // Validate configuration
-            if (!syncConfig.wordSyncURL) {
-                console.error('Missing wordSyncURL in config:', syncConfig);
-                throw new Error('Sync URL not configured');
-            }
-            if (!syncConfig.wordUser) {
-                console.error('Missing wordUser in config:', syncConfig);
-                throw new Error('User not configured');
-            }
-
             if (showStatus) {
-                syncStatus.textContent = 'Syncing...';
-                syncButton.disabled = true;
-            }
-
-            const currentList = localData.wordList || [];
-
-            // Send sync request to configured server
-            const response = await fetch(syncConfig.wordSyncURL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'User-Id': syncConfig.wordUser.id.toString(),
-                    'User-Name': syncConfig.wordUser.name
-                },
-                body: JSON.stringify({
-                    data: currentList
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const serverResponse = await response.json();
-            
-            if (serverResponse.code === 200) {
-                // Merge server response with local deleted words
-                const localList = await chrome.storage.local.get(['wordList']);
-                const localDeletedWords = (localList.wordList || [])
-                    .filter(item => item.del_flag);
-
-                // Combine server words with local deleted words
-                const mergedList = [
-                    ...serverResponse.data,
-                    ...localDeletedWords.filter(deletedWord => 
-                        !serverResponse.data.some(serverWord => 
-                            serverWord.word.toLowerCase() === deletedWord.word.toLowerCase()
-                        )
-                    )
-                ];
-
-                await chrome.storage.local.set({ wordList: mergedList });
-
-                // Update all open tabs
-                const tabs = await chrome.tabs.query({});
-                for (const tab of tabs) {
-                    try {
-                        // Skip chrome:// pages, extension pages, and other restricted URLs
-                        if (!tab.url || 
-                            tab.url.startsWith('chrome://') || 
-                            tab.url.startsWith('chrome-extension://') ||
-                            tab.url.startsWith('about:') ||
-                            tab.url.startsWith('edge://')) {
-                            continue;
-                        }
-                        await chrome.tabs.sendMessage(tab.id, {
-                            action: 'highlight',
-                            wordList: mergedList
-                        });
-                    } catch (err) {
-                        // Only log if it's not a connection error
-                        if (!err.message.includes('Receiving end does not exist')) {
-                            console.log(`Could not update tab ${tab.id}:`, err);
-                        }
-                    }
-                }
-
-                if (showStatus) {
-                    syncStatus.textContent = 'Sync completed successfully!';
-                    syncStatus.style.color = '#4CAF50';
-                }
-            } else {
-                throw new Error(serverResponse.message || 'Sync failed');
-            }
-        } catch (error) {
-            console.error('Sync error:', error);
-            if (showStatus) {
-                syncStatus.textContent = `Sync failed: ${error.message}`;
-                syncStatus.style.color = '#f44336';
-            }
-        } finally {
-            if (showStatus) {
-                syncButton.disabled = false;
+                syncStatus.textContent = 'Sync initiated...';
+                syncStatus.style.color = '#4CAF50';
                 setTimeout(() => {
                     syncStatus.textContent = '';
                     syncStatus.style.color = '#666';
                 }, 3000);
+            }
+        } catch (error) {
+            console.error('[Sync Debug] Sync operation failed:', error);
+            if (showStatus) {
+                syncStatus.textContent = `Sync failed: ${error.message}`;
+                syncStatus.style.color = '#f44336';
             }
         }
     }
@@ -285,6 +198,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Listen for sync triggers from content script or background
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (request.action === 'triggerSync') {
+            console.log('[Sync Debug] Received sync trigger from:', sender.tab ? 
+                `tab ${sender.tab.id}` : 'extension');
             syncWithServer(false);  // Single point of sync
         }
     });
