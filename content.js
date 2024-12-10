@@ -129,7 +129,7 @@ async function fetchWordDefinition(word) {
                 'Authorization': `Bearer ${config.openaiKey}`
             },
             body: JSON.stringify({
-                model: "gpt-4o-mini-2024-07-18",
+                model: "gpt-4o-mini",
                 messages: [{
                     role: "user",
                     content: prompt
