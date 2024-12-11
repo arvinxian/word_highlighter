@@ -115,3 +115,59 @@
     transform: scale(1.1);
     transition: transform 0.2s;
 }
+
+.definition-container {
+    margin: 10px 0;
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    padding: 10px;
+    border-radius: 4px;
+    background-color: #f9f9f9;
+    text-align: left;
+}
+
+.definition-container h4 {
+    margin: 5px 0;
+    color: #333;
+    font-size: 14px;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 5px;
+}
+
+.openai-definition, .youdao-definition {
+    margin-bottom: 15px;
+}
+
+.youdao-definition .trans-container {
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.youdao-definition .basic {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.youdao-definition .word-exp {
+    margin-bottom: 5px;
+}
+
+.youdao-definition .pos {
+    color: #666;
+    margin-right: 5px;
+}
+
+.youdao-definition .exam_type {
+    font-size: 12px;
+    color: #999;
+    margin: 5px 0;
+}
+
+.youdao-definition .word-wfs-less {
+    list-style: none;
+    padding: 0;
+    margin: 5px 0;
+    font-size: 13px;
+}

@@ -107,45 +107,48 @@ function highlightWords(wordList) {
     addHighlightListeners();
 }
 
-// Add this function to fetch word definition
-async function fetchWordDefinition(word) {
+// Function to fetch word definition from Youdao API
+async function fetchYoudaoDefinition(word) {
     try {
-        const config = await chrome.storage.sync.get([
-            'openaiKey',
-            'openaiBaseUrl',
-            'openaiPrompt'
-        ]);
-
-        if (!config.openaiKey || !config.openaiBaseUrl || !config.openaiPrompt) {
-            throw new Error('OpenAI configuration not found');
-        }
-
-        const prompt = config.openaiPrompt.replace('{word}', word);
-        
-        const response = await fetch(config.openaiBaseUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${config.openaiKey}`
-            },
-            body: JSON.stringify({
-                model: "gpt-4o-mini",
-                messages: [{
-                    role: "user",
-                    content: prompt
-                }]
-            })
-        });
-
+        const response = await fetch(`https://xianyou.uk/youdaoapi/result?word=${encodeURIComponent(word)}&lang=en`);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-
-        const data = await response.json();
-        return data.choices[0].message.content;
+        
+        const html = await response.text();
+        
+        // Create a temporary DOM element to parse the HTML
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        
+        // Find the specific element we want
+        const simpleDict = doc.querySelector('.simple.dict-module .trans-container');
+        
+        if (!simpleDict) {
+            return '<p class="error">No Youdao definition found</p>';
+        }
+        
+        // Clean up data-v attributes
+        const cleanElement = (element) => {
+            const attributes = element.attributes;
+            for (let i = attributes.length - 1; i >= 0; i--) {
+                const attr = attributes[i];
+                if (attr.name.startsWith('data-v-')) {
+                    element.removeAttribute(attr.name);
+                }
+            }
+            element.childNodes.forEach(child => {
+                if (child.nodeType === 1) { // Element node
+                    cleanElement(child);
+                }
+            });
+        };
+        
+        cleanElement(simpleDict);
+        return simpleDict.outerHTML;
     } catch (error) {
-        console.error('Error fetching definition:', error);
-        return `<p class="error">Error fetching definition: ${error.message}</p>`;
+        console.error('Error fetching Youdao definition:', error);
+        return `<p class="error">Error fetching Youdao definition: ${error.message}</p>`;
     }
 }
 
@@ -176,7 +179,14 @@ function showRemoveWordPopup(wordId, rect) {
                 </div>
                 <p>Remove "${wordId}" from highlight list?</p>
                 <div class="definition-container">
-                    <p>Loading definition...</p>
+                    <div class="openai-definition">
+                        <h4>OpenAI Definition</h4>
+                        <p>Loading definition...</p>
+                    </div>
+                    <div class="youdao-definition">
+                        <h4>Youdao Definition</h4>
+                        <p>Loading definition...</p>
+                    </div>
                 </div>
                 <button class="popup-btn" id="removeWordYes">Yes</button>
                 <button class="popup-btn" id="removeWordNo">No</button>
@@ -193,11 +203,25 @@ function showRemoveWordPopup(wordId, rect) {
         // Add heart click handlers
         setupHeartHandlers(popup, wordData, wordList);
 
-        // Fetch and display definition
-        const definitionContainer = popup.querySelector('.definition-container');
-        fetchWordDefinition(wordId).then(definition => {
-            definitionContainer.innerHTML = definition;
-        });
+        // Fetch OpenAI definition
+        const openaiContainer = popup.querySelector('.openai-definition');
+        fetchWordDefinition(wordId)
+            .then(openaiDef => {
+                openaiContainer.innerHTML = `<h4>OpenAI Definition</h4>${openaiDef}`;
+            })
+            .catch(error => {
+                openaiContainer.innerHTML = `<h4>OpenAI Definition</h4><p class="error">Error: ${error.message}</p>`;
+            });
+
+        // Fetch Youdao definition independently
+        const youdaoContainer = popup.querySelector('.youdao-definition');
+        fetchYoudaoDefinition(wordId)
+            .then(youdaoDef => {
+                youdaoContainer.innerHTML = `<h4>Youdao Definition</h4>${youdaoDef}`;
+            })
+            .catch(error => {
+                youdaoContainer.innerHTML = `<h4>Youdao Definition</h4><p class="error">Error: ${error.message}</p>`;
+            });
 
         const yesButton = popup.querySelector('#removeWordYes');
         const noButton = popup.querySelector('#removeWordNo');
@@ -360,6 +384,16 @@ function showAddWordPopup(selectedText, x, y) {
     popup.innerHTML = `
         <div class="popup-content">
             <p>Add "${selectedText}" to highlight list?</p>
+            <div class="definition-container">
+                <div class="openai-definition">
+                    <h4>OpenAI Definition</h4>
+                    <p>Loading definition...</p>
+                </div>
+                <div class="youdao-definition">
+                    <h4>Youdao Definition</h4>
+                    <p>Loading definition...</p>
+                </div>
+            </div>
             <button class="popup-btn" id="addWordYes">Yes</button>
             <button class="popup-btn" id="addWordNo">No</button>
         </div>
@@ -457,6 +491,26 @@ function showAddWordPopup(selectedText, x, y) {
     };
     
     document.addEventListener('mousedown', handleOutsideClick);
+
+    // Fetch OpenAI definition
+    const openaiContainer = popup.querySelector('.openai-definition');
+    fetchWordDefinition(selectedText)
+        .then(openaiDef => {
+            openaiContainer.innerHTML = `<h4>OpenAI Definition</h4>${openaiDef}`;
+        })
+        .catch(error => {
+            openaiContainer.innerHTML = `<h4>OpenAI Definition</h4><p class="error">Error: ${error.message}</p>`;
+        });
+
+    // Fetch Youdao definition independently
+    const youdaoContainer = popup.querySelector('.youdao-definition');
+    fetchYoudaoDefinition(selectedText)
+        .then(youdaoDef => {
+            youdaoContainer.innerHTML = `<h4>Youdao Definition</h4>${youdaoDef}`;
+        })
+        .catch(error => {
+            youdaoContainer.innerHTML = `<h4>Youdao Definition</h4><p class="error">Error: ${error.message}</p>`;
+        });
 }
 
 // Variable to track if we should show the popup
@@ -654,4 +708,46 @@ if (window.location.href.includes('pdf.js/web/viewer.html')) {
 window.addEventListener('unload', () => {
     observer.disconnect();
 });
+
+// Add this function to fetch word definition from OpenAI
+async function fetchWordDefinition(word) {
+    try {
+        const config = await chrome.storage.sync.get([
+            'openaiKey',
+            'openaiBaseUrl',
+            'openaiPrompt'
+        ]);
+
+        if (!config.openaiKey || !config.openaiBaseUrl || !config.openaiPrompt) {
+            throw new Error('OpenAI configuration not found');
+        }
+
+        const prompt = config.openaiPrompt.replace('{word}', word);
+        
+        const response = await fetch(config.openaiBaseUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${config.openaiKey}`
+            },
+            body: JSON.stringify({
+                model: "gpt-4o-mini",
+                messages: [{
+                    role: "user",
+                    content: prompt
+                }]
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return data.choices[0].message.content;
+    } catch (error) {
+        console.error('Error fetching OpenAI definition:', error);
+        return `<p class="error">Error fetching OpenAI definition: ${error.message}</p>`;
+    }
+}
 
