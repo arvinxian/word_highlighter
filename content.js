@@ -154,10 +154,16 @@ async function fetchYoudaoDefinition(word) {
 
 // Function to show popup for removing words
 function showRemoveWordPopup(wordId, rect) {
-    // Remove any existing popup
-    const existingPopup = document.querySelector('.word-highlighter-remove-popup');
-    if (existingPopup) {
-        existingPopup.remove();
+    // Remove any existing popups first
+    const existingPopups = document.querySelectorAll('.word-highlighter-remove-popup');
+    existingPopups.forEach(popup => popup.remove());
+
+    // Add a data attribute to track active popups
+    const activePopupId = `popup-${wordId}-${Date.now()}`;
+    
+    // Check if we already have an active popup for this word
+    if (document.querySelector(`[data-popup-id^="popup-${wordId}"]`)) {
+        return; // Exit if a popup for this word already exists
     }
 
     // Get current word data
@@ -172,6 +178,8 @@ function showRemoveWordPopup(wordId, rect) {
         // Create popup element with loading state
         const popup = document.createElement('div');
         popup.className = 'word-highlighter-popup word-highlighter-remove-popup';
+        popup.dataset.popupId = activePopupId; // Add data attribute to track this popup
+
         popup.innerHTML = `
             <div class="popup-content">
                 <div class="heart-container">
@@ -226,12 +234,11 @@ function showRemoveWordPopup(wordId, rect) {
         const yesButton = popup.querySelector('#removeWordYes');
         const noButton = popup.querySelector('#removeWordNo');
 
-        let isOverPopup = false;
-        let isOverWord = true;  // Start as true since we're showing from word hover
-
+        // Update the hidePopup function
         const hidePopup = () => {
-            popup.remove();
-            // Remove the document click listener when popup is hidden
+            if (document.querySelector(`[data-popup-id="${activePopupId}"]`)) {
+                popup.remove();
+            }
             document.removeEventListener('click', handleOutsideClick);
         };
 
@@ -239,7 +246,8 @@ function showRemoveWordPopup(wordId, rect) {
         const handleOutsideClick = (e) => {
             const clickedElement = e.target;
             // Check if click is outside both the popup and the highlighted word
-            if (!popup.contains(clickedElement) && clickedElement.id !== wordId) {
+            if (!popup.contains(clickedElement) && 
+                !clickedElement.classList.contains('word-highlighter-highlight')) {
                 hidePopup();
             }
         };
@@ -247,23 +255,7 @@ function showRemoveWordPopup(wordId, rect) {
         // Add document click listener
         document.addEventListener('click', handleOutsideClick);
 
-        // Track mouse entering/leaving the popup
-        popup.addEventListener('mouseenter', () => {
-            isOverPopup = true;
-        });
-
-        popup.addEventListener('mouseleave', () => {
-            isOverPopup = false;
-        });
-
-        // Track mouse leaving the word
-        const wordElement = document.getElementById(wordId);
-        if (wordElement) {
-            wordElement.addEventListener('mouseleave', () => {
-                isOverWord = false;
-            });
-        }
-
+        // Update button click handlers
         yesButton.addEventListener('click', () => {
             chrome.storage.local.get(['wordList'], (result) => {
                 const wordList = result.wordList || [];
@@ -312,8 +304,19 @@ function showRemoveWordPopup(wordId, rect) {
             });
         });
 
-        noButton.addEventListener('click', () => {
-            hidePopup();
+        noButton.addEventListener('click', hidePopup);
+
+        // Clean up popup when the word element is removed
+        const observer = new MutationObserver((mutations) => {
+            if (!document.getElementById(wordId)) {
+                hidePopup();
+                observer.disconnect();
+            }
+        });
+
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
         });
     });
 }
@@ -595,24 +598,42 @@ chrome.storage.local.get(['wordList'], async (result) => {
 
 // Add hover event listeners to highlighted words
 function addHighlightListeners() {
-    if (!isExtensionEnabled) return; // Skip if extension is disabled
+    if (!isExtensionEnabled) return;
 
-    document.querySelectorAll('.word-highlighter-highlight').forEach(element => {
-        let hoverTimer;
+    let activePopupTimer = null;
+    const highlights = document.querySelectorAll('.word-highlighter-highlight');
 
-        element.addEventListener('mouseenter', (e) => {
+    highlights.forEach(element => {
+        // Remove any existing listeners first
+        element.removeEventListener('mouseenter', element.highlightEnterHandler);
+        element.removeEventListener('mouseleave', element.highlightLeaveHandler);
+
+        // Create new handlers
+        element.highlightEnterHandler = (e) => {
+            // Clear any existing timer
+            if (activePopupTimer) {
+                clearTimeout(activePopupTimer);
+            }
+
             chrome.storage.sync.get(['hoverDelay'], (result) => {
                 const delay = result.hoverDelay || 500;
-                hoverTimer = setTimeout(() => {
+                activePopupTimer = setTimeout(() => {
                     const wordId = e.target.id;
                     showRemoveWordPopup(wordId, e.target.getBoundingClientRect());
                 }, delay);
             });
-        });
+        };
 
-        element.addEventListener('mouseleave', () => {
-            clearTimeout(hoverTimer);
-        });
+        element.highlightLeaveHandler = () => {
+            if (activePopupTimer) {
+                clearTimeout(activePopupTimer);
+                activePopupTimer = null;
+            }
+        };
+
+        // Add the new listeners
+        element.addEventListener('mouseenter', element.highlightEnterHandler);
+        element.addEventListener('mouseleave', element.highlightLeaveHandler);
     });
 }
 
