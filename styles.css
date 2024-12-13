@@ -20,6 +20,10 @@
     box-shadow: 0 2px 5px rgba(0,0,0,0.2);
     z-index: 999999;
     user-select: none;
+    max-height: 80vh;
+    overflow-y: auto;
+    max-width: 90vw;
+    transition: opacity 0.3s ease-out;
 }
 
 .word-highlighter-popup .popup-content {
@@ -77,6 +81,9 @@
     background-color: #f9f9f9;
     text-align: left;
     color: #333 !important;
+    max-height: 50vh;
+    overflow-y: auto;
+    transition: height 0.2s ease-out;
 }
 
 .word-highlighter-popup .definition-container * {
@@ -170,4 +177,17 @@
     padding: 0;
     margin: 5px 0;
     font-size: 13px;
+}
+
+.definition-placeholder {
+    background: #f0f0f0;
+    border-radius: 4px;
+    margin: 10px 0;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 0.6; }
+    50% { opacity: 0.8; }
+    100% { opacity: 0.6; }
 }

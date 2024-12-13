@@ -152,7 +152,68 @@ async function fetchYoudaoDefinition(word) {
     }
 }
 
-// Function to show popup for removing words
+// Add this utility function for calculating popup position
+function calculatePopupPosition(rect, popupElement) {
+    // Get viewport dimensions
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    
+    // Get popup dimensions
+    const popupRect = popupElement.getBoundingClientRect();
+    const popupWidth = popupRect.width;
+    const popupHeight = popupRect.height;
+    
+    // Calculate initial position (default is below the word)
+    let left = rect.left;
+    let top = rect.bottom + 5;
+    
+    // Check if popup would go off the right edge
+    if (left + popupWidth > viewportWidth) {
+        left = viewportWidth - popupWidth - 10; // 10px padding from edge
+    }
+    
+    // Check if popup would go off the left edge
+    if (left < 0) {
+        left = 10; // 10px padding from edge
+    }
+    
+    // Check if popup would go off the bottom edge
+    if (top + popupHeight > viewportHeight) {
+        // Place popup above the word instead
+        top = rect.top - popupHeight - 5;
+        
+        // If it would still go off the top edge, place it at the top of viewport
+        if (top < 0) {
+            top = 10;
+        }
+    }
+    
+    return { left, top };
+}
+
+// Add a function to handle popup resizing and repositioning
+function handlePopupResize(popup, rect) {
+    // Create a ResizeObserver to watch for size changes
+    const resizeObserver = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+            // Recalculate position when size changes
+            const { left, top } = calculatePopupPosition(rect, popup);
+            
+            // Update position with smooth transition
+            popup.style.transition = 'left 0.2s, top 0.2s';
+            popup.style.left = `${left}px`;
+            popup.style.top = `${top}px`;
+        }
+    });
+
+    // Start observing the popup
+    resizeObserver.observe(popup);
+
+    // Return the observer so it can be disconnected later
+    return resizeObserver;
+}
+
+// Update showRemoveWordPopup function
 function showRemoveWordPopup(wordId, rect) {
     // Remove any existing popups first
     const existingPopups = document.querySelectorAll('.word-highlighter-remove-popup');
@@ -175,11 +236,17 @@ function showRemoveWordPopup(wordId, rect) {
         
         if (!wordData) return;
 
-        // Create popup element with loading state
+        // Create popup element
         const popup = document.createElement('div');
         popup.className = 'word-highlighter-popup word-highlighter-remove-popup';
-        popup.dataset.popupId = activePopupId; // Add data attribute to track this popup
+        popup.dataset.popupId = activePopupId;
+        
+        // Add popup to document first with invisible positioning
+        popup.style.visibility = 'hidden';
+        popup.style.opacity = '0';
+        document.body.appendChild(popup);
 
+        // Set initial content with placeholders for definitions
         popup.innerHTML = `
             <div class="popup-content">
                 <div class="heart-container">
@@ -189,11 +256,11 @@ function showRemoveWordPopup(wordId, rect) {
                 <div class="definition-container">
                     <div class="openai-definition">
                         <h4>OpenAI Definition</h4>
-                        <p>Loading definition...</p>
+                        <div class="definition-placeholder" style="height: 100px"></div>
                     </div>
                     <div class="youdao-definition">
                         <h4>Youdao Definition</h4>
-                        <p>Loading definition...</p>
+                        <div class="definition-placeholder" style="height: 100px"></div>
                     </div>
                 </div>
                 <button class="popup-btn" id="removeWordYes">Yes</button>
@@ -201,12 +268,17 @@ function showRemoveWordPopup(wordId, rect) {
             </div>
         `;
 
-        // Position popup near the word
-        popup.style.left = `${rect.left}px`;
-        popup.style.top = `${rect.bottom + 5}px`;
+        // Calculate initial position
+        const { left, top } = calculatePopupPosition(rect, popup);
+        popup.style.left = `${left}px`;
+        popup.style.top = `${top}px`;
 
-        // Add to document
-        document.body.appendChild(popup);
+        // Set up resize observer
+        const resizeObserver = handlePopupResize(popup, rect);
+
+        // Make popup visible with transition
+        popup.style.visibility = 'visible';
+        popup.style.opacity = '1';
 
         // Add heart click handlers
         setupHeartHandlers(popup, wordData, wordList);
@@ -234,9 +306,10 @@ function showRemoveWordPopup(wordId, rect) {
         const yesButton = popup.querySelector('#removeWordYes');
         const noButton = popup.querySelector('#removeWordNo');
 
-        // Update the hidePopup function
+        // Update the hidePopup function to clean up the observer
         const hidePopup = () => {
             if (document.querySelector(`[data-popup-id="${activePopupId}"]`)) {
+                resizeObserver.disconnect();
                 popup.remove();
             }
             document.removeEventListener('click', handleOutsideClick);
@@ -373,7 +446,7 @@ async function updateStarCount(wordData, wordList, newCount) {
     }
 }
 
-// Create and show popup
+// Update showAddWordPopup function
 function showAddWordPopup(selectedText, x, y) {
     // Remove any existing popup
     const existingPopup = document.querySelector('.word-highlighter-popup');
@@ -384,17 +457,24 @@ function showAddWordPopup(selectedText, x, y) {
     // Create popup element
     const popup = document.createElement('div');
     popup.className = 'word-highlighter-popup';
+    
+    // Add popup to document first with invisible positioning
+    popup.style.visibility = 'hidden';
+    popup.style.opacity = '0';
+    document.body.appendChild(popup);
+
+    // Set initial content with placeholders
     popup.innerHTML = `
         <div class="popup-content">
             <p>Add "${selectedText}" to highlight list?</p>
             <div class="definition-container">
                 <div class="openai-definition">
                     <h4>OpenAI Definition</h4>
-                    <p>Loading definition...</p>
+                    <div class="definition-placeholder" style="height: 100px"></div>
                 </div>
                 <div class="youdao-definition">
                     <h4>Youdao Definition</h4>
-                    <p>Loading definition...</p>
+                    <div class="definition-placeholder" style="height: 100px"></div>
                 </div>
             </div>
             <button class="popup-btn" id="addWordYes">Yes</button>
@@ -402,10 +482,26 @@ function showAddWordPopup(selectedText, x, y) {
         </div>
     `;
 
-    // Position popup
+    // Calculate initial position
+    const rect = {
+        left: x,
+        right: x,
+        top: y,
+        bottom: y,
+        width: 0,
+        height: 0
+    };
+    const { left, top } = calculatePopupPosition(rect, popup);
+    
+    // Set up resize observer
+    const resizeObserver = handlePopupResize(popup, rect);
+
+    // Update popup position and make visible
     popup.style.position = 'fixed';
-    popup.style.left = `${x}px`;
-    popup.style.top = `${y}px`;
+    popup.style.left = `${left}px`;
+    popup.style.top = `${top}px`;
+    popup.style.visibility = 'visible';
+    popup.style.opacity = '1';
 
     // Function to handle word addition
     const handleAddWord = () => {
@@ -465,18 +561,24 @@ function showAddWordPopup(selectedText, x, y) {
     const yesButton = document.getElementById('addWordYes');
     const noButton = document.getElementById('addWordNo');
 
-    // Using mousedown instead of click to handle the event before mouseup
+    // Update cleanup
+    const cleanup = () => {
+        resizeObserver.disconnect();
+        popup.remove();
+    };
+
+    // Update event listeners to use cleanup
     yesButton.addEventListener('mousedown', (e) => {
         e.preventDefault();
         e.stopPropagation();
         handleAddWord();
-        popup.remove();
+        cleanup();
     });
 
     noButton.addEventListener('mousedown', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        popup.remove();
+        cleanup();
     });
 
     // Prevent mouseup from triggering on the popup
