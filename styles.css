@@ -108,14 +108,24 @@
     font-size: 20px;
     color: #8c3145;
     user-select: none;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
 }
 
 .heart.filled::after {
     content: "♥";
+    font-size: 1.2em;
+    position: relative;
+    top: -1px;
 }
 
 .heart.hollow::after {
     content: "♡";
+    font-size: 1.2em;
 }
 
 .heart:hover {
