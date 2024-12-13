@@ -39,6 +39,12 @@
     overflow-y: auto;
     max-width: 90vw;
     transition: opacity 0.3s ease-out;
+    will-change: transform;
+    transform: translateZ(0);
+    transition: left 0.2s ease-out, top 0.2s ease-out, opacity 0.3s ease-out;
+    pointer-events: auto;
+    backface-visibility: hidden;
+    -webkit-font-smoothing: subpixel-antialiased;
 }
 
 .word-highlighter-popup .popup-content {
@@ -99,6 +105,10 @@
     max-height: 50vh;
     overflow-y: auto;
     transition: height 0.2s ease-out;
+    contain: content;
+    will-change: contents;
+    transform: translateZ(0);
+    backface-visibility: hidden;
 }
 
 .word-highlighter-popup .definition-container * {
@@ -177,6 +187,10 @@
     font-size: 13px;  /* Base font size for all definition content */
     line-height: 1.4;
     font-family: Arial, sans-serif;
+    contain: content;
+    will-change: contents;
+    transform: translateZ(0);
+    backface-visibility: hidden;
 }
 
 /* Style all headings in definitions to be the same size */

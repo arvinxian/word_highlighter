@@ -152,7 +152,7 @@ async function fetchYoudaoDefinition(word) {
     }
 }
 
-// Add this utility function for calculating popup position
+// Update the calculatePopupPosition function
 function calculatePopupPosition(rect, popupElement) {
     // Get viewport dimensions
     const viewportWidth = window.innerWidth;
@@ -163,53 +163,98 @@ function calculatePopupPosition(rect, popupElement) {
     const popupWidth = popupRect.width;
     const popupHeight = popupRect.height;
     
-    // Calculate initial position (default is below the word)
+    // Calculate available space above and below the word
+    const spaceAbove = rect.top;
+    const spaceBelow = viewportHeight - rect.bottom;
+    
+    // Determine initial position
     let left = rect.left;
-    let top = rect.bottom + 5;
+    let top;
     
-    // Check if popup would go off the right edge
-    if (left + popupWidth > viewportWidth) {
-        left = viewportWidth - popupWidth - 10; // 10px padding from edge
+    // Handle horizontal positioning
+    if (left + popupWidth > viewportWidth - 10) {
+        left = Math.max(10, viewportWidth - popupWidth - 10);
+    }
+    if (left < 10) {
+        left = 10;
     }
     
-    // Check if popup would go off the left edge
-    if (left < 0) {
-        left = 10; // 10px padding from edge
-    }
-    
-    // Check if popup would go off the bottom edge
-    if (top + popupHeight > viewportHeight) {
-        // Place popup above the word instead
-        top = rect.top - popupHeight - 5;
-        
-        // If it would still go off the top edge, place it at the top of viewport
-        if (top < 0) {
-            top = 10;
-        }
+    // Determine vertical positioning
+    if (spaceBelow >= popupHeight + 10 || spaceBelow > spaceAbove) {
+        // Place below if there's enough space or more space below
+        top = Math.min(rect.bottom + 5, viewportHeight - popupHeight - 10);
+    } else {
+        // Place above if there's more space there
+        top = Math.max(10, rect.top - popupHeight - 5);
     }
     
     return { left, top };
 }
 
-// Add a function to handle popup resizing and repositioning
-function handlePopupResize(popup, rect) {
-    // Create a ResizeObserver to watch for size changes
-    const resizeObserver = new ResizeObserver((entries) => {
-        for (const entry of entries) {
-            // Recalculate position when size changes
-            const { left, top } = calculatePopupPosition(rect, popup);
-            
-            // Update position with smooth transition
-            popup.style.transition = 'left 0.2s, top 0.2s';
-            popup.style.left = `${left}px`;
-            popup.style.top = `${top}px`;
+// Update the handlePopupResize function
+function handlePopupResize(popup, rect, initialPosition) {
+    let isPositionLocked = false;
+    let resizeTimeout = null;
+    let lastHeight = null;
+    let stablePositionTimeout = null;
+    
+    // Function to calculate and set position
+    const updatePosition = (entry) => {
+        const currentHeight = entry.contentRect.height;
+        
+        // Skip if position is locked and height hasn't changed significantly
+        if (isPositionLocked && lastHeight && Math.abs(currentHeight - lastHeight) < 20) {
+            return;
         }
+        
+        // Calculate new position while respecting initial position preference
+        const { left, top } = calculatePopupPosition(rect, popup);
+        
+        // Update position smoothly
+        popup.style.transition = 'left 0.2s, top 0.2s';
+        popup.style.left = `${left}px`;
+        popup.style.top = `${top}px`;
+        
+        lastHeight = currentHeight;
+        
+        // Clear existing stable position timeout
+        if (stablePositionTimeout) {
+            clearTimeout(stablePositionTimeout);
+        }
+        
+        // Set new timeout to lock position
+        stablePositionTimeout = setTimeout(() => {
+            isPositionLocked = true;
+        }, 1000);
+    };
+    
+    const resizeObserver = new ResizeObserver((entries) => {
+        // Clear any existing timeout
+        if (resizeTimeout) {
+            clearTimeout(resizeTimeout);
+        }
+        
+        // Debounce the resize handling
+        resizeTimeout = setTimeout(() => {
+            const entry = entries[entries.length - 1];
+            updatePosition(entry);
+        }, 100);
     });
-
-    // Start observing the popup
+    
+    // Start observing
     resizeObserver.observe(popup);
-
-    // Return the observer so it can be disconnected later
+    
+    // Add cleanup function
+    popup.cleanup = () => {
+        if (resizeTimeout) {
+            clearTimeout(resizeTimeout);
+        }
+        if (stablePositionTimeout) {
+            clearTimeout(stablePositionTimeout);
+        }
+        resizeObserver.disconnect();
+    };
+    
     return resizeObserver;
 }
 
@@ -269,12 +314,12 @@ function showRemoveWordPopup(wordId, rect) {
         `;
 
         // Calculate initial position
-        const { left, top } = calculatePopupPosition(rect, popup);
+        const { left, top, preferredPosition } = calculatePopupPosition(rect, popup);
         popup.style.left = `${left}px`;
         popup.style.top = `${top}px`;
 
-        // Set up resize observer
-        const resizeObserver = handlePopupResize(popup, rect);
+        // Set up resize observer with initial position preference
+        const resizeObserver = handlePopupResize(popup, rect, preferredPosition);
 
         // Make popup visible with transition
         popup.style.visibility = 'visible';
@@ -309,6 +354,9 @@ function showRemoveWordPopup(wordId, rect) {
         // Update the hidePopup function to clean up the observer
         const hidePopup = () => {
             if (document.querySelector(`[data-popup-id="${activePopupId}"]`)) {
+                if (popup.cleanup) {
+                    popup.cleanup();
+                }
                 resizeObserver.disconnect();
                 popup.remove();
             }
@@ -491,10 +539,12 @@ function showAddWordPopup(selectedText, x, y) {
         width: 0,
         height: 0
     };
-    const { left, top } = calculatePopupPosition(rect, popup);
     
-    // Set up resize observer
-    const resizeObserver = handlePopupResize(popup, rect);
+    // Calculate initial position
+    const { left, top, preferredPosition } = calculatePopupPosition(rect, popup);
+    
+    // Set up resize observer with initial position preference
+    const resizeObserver = handlePopupResize(popup, rect, preferredPosition);
 
     // Update popup position and make visible
     popup.style.position = 'fixed';
@@ -563,6 +613,9 @@ function showAddWordPopup(selectedText, x, y) {
 
     // Update cleanup
     const cleanup = () => {
+        if (popup.cleanup) {
+            popup.cleanup();
+        }
         resizeObserver.disconnect();
         popup.remove();
     };
