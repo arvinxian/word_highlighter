@@ -287,20 +287,20 @@ function showRemoveWordPopup(wordId, rect) {
         const openaiContainer = popup.querySelector('.openai-definition');
         fetchWordDefinition(wordId)
             .then(openaiDef => {
-                openaiContainer.innerHTML = `<h4>OpenAI Definition</h4>${openaiDef}`;
+                openaiContainer.innerHTML = `<h6>OpenAI Definition</h6>${openaiDef}`;
             })
             .catch(error => {
-                openaiContainer.innerHTML = `<h4>OpenAI Definition</h4><p class="error">Error: ${error.message}</p>`;
+                openaiContainer.innerHTML = `<h6>OpenAI Definition</h6><p class="error">Error: ${error.message}</p>`;
             });
 
         // Fetch Youdao definition independently
         const youdaoContainer = popup.querySelector('.youdao-definition');
         fetchYoudaoDefinition(wordId)
             .then(youdaoDef => {
-                youdaoContainer.innerHTML = `<h4>Youdao Definition</h4>${youdaoDef}`;
+                youdaoContainer.innerHTML = `<h6>Youdao Definition</h6>${youdaoDef}`;
             })
             .catch(error => {
-                youdaoContainer.innerHTML = `<h4>Youdao Definition</h4><p class="error">Error: ${error.message}</p>`;
+                youdaoContainer.innerHTML = `<h6>Youdao Definition</h6><p class="error">Error: ${error.message}</p>`;
             });
 
         const yesButton = popup.querySelector('#removeWordYes');
@@ -601,20 +601,20 @@ function showAddWordPopup(selectedText, x, y) {
     const openaiContainer = popup.querySelector('.openai-definition');
     fetchWordDefinition(selectedText)
         .then(openaiDef => {
-            openaiContainer.innerHTML = `<h4>OpenAI Definition</h4>${openaiDef}`;
+            openaiContainer.innerHTML = `<h6>OpenAI Definition</h6>${openaiDef}`;
         })
         .catch(error => {
-            openaiContainer.innerHTML = `<h4>OpenAI Definition</h4><p class="error">Error: ${error.message}</p>`;
+            openaiContainer.innerHTML = `<h6>OpenAI Definition</h6><p class="error">Error: ${error.message}</p>`;
         });
 
     // Fetch Youdao definition independently
     const youdaoContainer = popup.querySelector('.youdao-definition');
     fetchYoudaoDefinition(selectedText)
         .then(youdaoDef => {
-            youdaoContainer.innerHTML = `<h4>Youdao Definition</h4>${youdaoDef}`;
+            youdaoContainer.innerHTML = `<h6>Youdao Definition</h6>${youdaoDef}`;
         })
         .catch(error => {
-            youdaoContainer.innerHTML = `<h4>Youdao Definition</h4><p class="error">Error: ${error.message}</p>`;
+            youdaoContainer.innerHTML = `<h6>Youdao Definition</h6><p class="error">Error: ${error.message}</p>`;
         });
 }
 

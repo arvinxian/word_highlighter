@@ -133,6 +133,7 @@
     transition: transform 0.2s;
 }
 
+/* Common styles for both definition sections */
 .definition-container {
     margin: 10px 0;
     max-height: 300px;
@@ -142,38 +143,70 @@
     border-radius: 4px;
     background-color: #f9f9f9;
     text-align: left;
-}
-
-.definition-container h4 {
-    margin: 5px 0;
-    color: #333;
-    font-size: 14px;
-    border-bottom: 1px solid #ddd;
-    padding-bottom: 5px;
-}
-
-.openai-definition, .youdao-definition {
-    margin-bottom: 15px;
-}
-
-.youdao-definition .trans-container {
-    font-size: 14px;
+    font-size: 13px;  /* Base font size for all definition content */
     line-height: 1.4;
+    font-family: Arial, sans-serif;
+}
+
+/* Style all headings in definitions to be the same size */
+.definition-container h1,
+.definition-container h2,
+.definition-container h3,
+.definition-container h4,
+.definition-container h5,
+.definition-container h6 {
+    font-size: 14px;
+    color: #333;
+    margin: 8px 0;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #ddd;
+    font-weight: bold;
+    font-family: Arial, sans-serif;
+}
+
+/* Common styles for both OpenAI and Youdao content */
+.openai-definition,
+.youdao-definition {
+    margin-bottom: 15px;
+    font-size: 13px;  /* Unified font size */
+}
+
+/* OpenAI specific styles */
+.openai-definition p,
+.openai-definition ul,
+.openai-definition ol {
+    margin: 8px 0;
+    line-height: 1.4;
+}
+
+.openai-definition ul,
+.openai-definition ol {
+    padding-left: 20px;
+}
+
+/* Youdao specific styles */
+.youdao-definition .trans-container {
+    font-size: 13px;  /* Match OpenAI font size */
 }
 
 .youdao-definition .basic {
     list-style: none;
     padding: 0;
-    margin: 0;
+    margin: 8px 0;
 }
 
 .youdao-definition .word-exp {
-    margin-bottom: 5px;
+    margin-bottom: 8px;
 }
 
 .youdao-definition .pos {
     color: #666;
     margin-right: 5px;
+    font-size: 13px;
+}
+
+.youdao-definition .trans {
+    font-size: 13px;
 }
 
 .youdao-definition .exam_type {
@@ -189,11 +222,20 @@
     font-size: 13px;
 }
 
+/* Error message styling */
+.definition-container .error {
+    color: #f44336;
+    font-size: 13px;
+    margin: 5px 0;
+}
+
+/* Loading placeholder */
 .definition-placeholder {
     background: #f0f0f0;
     border-radius: 4px;
     margin: 10px 0;
     animation: pulse 1.5s infinite;
+    height: 80px;  /* Reduced height for better appearance */
 }
 
 @keyframes pulse {
