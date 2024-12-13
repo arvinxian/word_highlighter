@@ -1,10 +1,25 @@
 .word-highlighter-highlight {
-    /* background-color: yellow; */
-    /* color: black; */
+    /* Remove horizontal padding and adjust background positioning */
     border-radius: 2px;
-    padding: 0 2px;
+    padding: 0;  /* Remove padding */
     cursor: pointer;
     transition: background-color 0.2s;
+    display: inline;  /* Ensure inline flow */
+    box-decoration-break: clone;  /* Handle multi-line highlights */
+    position: relative;  /* For background positioning */
+    white-space: pre-wrap;  /* Preserve spaces */
+    
+    /* Use a negative margin and positive padding to prevent text shifting */
+    margin: 0;
+    background-clip: padding-box;  /* Clip background to padding box */
+}
+
+/* Special handling for PDF.js viewer */
+.pdfViewer .word-highlighter-highlight {
+    padding: 0;
+    margin: 0;
+    display: inline;
+    white-space: pre-wrap;
 }
 
 .word-highlighter-highlight:hover {

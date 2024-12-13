@@ -751,9 +751,15 @@ function updateHighlightStyles(styles) {
             background-color: ${styles.highlightColor || '#ffff00'} !important;
             color: ${styles.fontColor || '#000000'} !important;
             border-radius: 2px;
-            padding: 0 2px;
+            padding: 0;
             cursor: pointer;
             transition: background-color 0.2s;
+            display: inline;
+            box-decoration-break: clone;
+            position: relative;
+            white-space: pre-wrap;
+            margin: 0;
+            background-clip: padding-box;
             mix-blend-mode: normal !important;
         }
 
@@ -763,6 +769,10 @@ function updateHighlightStyles(styles) {
             color: ${styles.fontColor || '#000000'} !important;
             opacity: 1 !important;
             mix-blend-mode: normal !important;
+            padding: 0;
+            margin: 0;
+            display: inline;
+            white-space: pre-wrap;
         }
 
         .word-highlighter-highlight:hover {
