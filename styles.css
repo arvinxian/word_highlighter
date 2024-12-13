@@ -113,34 +113,50 @@
 /* Heart symbol styles */
 .heart-container {
     display: flex;
-    gap: 5px;
+    gap: 2px;
     justify-content: center;
     margin-bottom: 10px;
+    align-items: center;
+    height: 24px;
 }
 
 .heart {
     cursor: pointer;
-    font-size: 20px;
     color: #8c3145;
     user-select: none;
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
+    position: relative;
+    /* Use a more consistent font for heart symbols */
+    font-family: "Segoe UI Symbol", "Arial Unicode MS", sans-serif;
+}
+
+.heart.filled::after,
+.heart.hollow::after {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;  /* Unified larger size */
     line-height: 1;
 }
 
 .heart.filled::after {
     content: "♥";
-    font-size: 1.2em;
-    position: relative;
-    top: -1px;
+    /* No additional adjustments needed */
 }
 
 .heart.hollow::after {
     content: "♡";
-    font-size: 1.2em;
+    font-size: 26px;  /* Slightly larger to match filled heart visual weight */
+    margin-top: -1px;  /* Small adjustment to center vertically */
 }
 
 .heart:hover {
