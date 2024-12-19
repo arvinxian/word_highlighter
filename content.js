@@ -31,86 +31,112 @@ async function checkSiteStatus() {
 function highlightWords(wordList, targetElement = document.body) {
     if (!isExtensionEnabled) return;
 
-    console.log('Highlighting words:', wordList);
-    // Create a regular expression from the word list
-    const words = wordList
-        .filter(item => item && typeof item === 'object')
-        .filter(item => !item.del_flag)
-        .map(item => item.word)
-        .filter(word => word && typeof word === 'string');
-    
-    if (words.length === 0) return;
-    
-    // Create regex pattern with word boundaries and escape special characters
-    const escapedWords = words.map(word => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-    const regex = new RegExp(`\\b(${escapedWords.join('|')})\\b`, 'gi');
+    // Skip if the target element is not in the document
+    if (!document.contains(targetElement)) return;
 
-    // Walk through all text nodes in the target element
-    const walker = document.createTreeWalker(
-        targetElement,
-        NodeFilter.SHOW_TEXT,
-        {
-            acceptNode: function(node) {
-                // Skip if parent is script, style, already highlighted, or inside a highlight
-                if (
-                    node.parentElement.tagName === 'SCRIPT' ||
-                    node.parentElement.tagName === 'STYLE' ||
-                    node.parentElement.tagName === 'TEXTAREA' ||
-                    node.parentElement.tagName === 'INPUT' ||
-                    node.parentElement.classList.contains('word-highlighter-highlight') ||
-                    node.parentElement.closest('.word-highlighter-highlight') ||
-                    // Skip if node is empty or only whitespace
-                    !node.textContent.trim()
-                ) {
-                    return NodeFilter.FILTER_REJECT;
-                }
-                return NodeFilter.FILTER_ACCEPT;
-            }
-        },
-        false
-    );
+    // Skip if the element is already being processed
+    if (targetElement.getAttribute('data-processing')) return;
+    targetElement.setAttribute('data-processing', 'true');
 
-    const nodesToHighlight = [];
-    let node;
-    while (node = walker.nextNode()) {
-        // Reset regex lastIndex before testing
-        regex.lastIndex = 0;
-        const text = node.textContent;
-        if (regex.test(text)) {
-            regex.lastIndex = 0;  // Reset again for future use
-            nodesToHighlight.push(node);
+    try {
+        // For Google search results, only process if it's a result container
+        if (isGoogleSearch() && !isSearchResultContainer(targetElement)) {
+            return;
         }
-    }
 
-    console.log('Found nodes to highlight:', nodesToHighlight.length);
-    // Process the nodes that need highlighting
-    nodesToHighlight.forEach(node => {
-        const span = document.createElement('span');
-        regex.lastIndex = 0;  // Reset regex state before replace
-        span.innerHTML = node.textContent.replace(
-            regex,
-            match => {
-                const wordObj = wordList.find(item => 
-                    item.word.toLowerCase() === match.toLowerCase()
-                );
-                // Safety check: if word object not found or invalid, return original text
-                if (!wordObj || typeof wordObj !== 'object') {
-                    console.warn('Word object not found for:', match);
-                    return match;
+        console.log('Highlighting words:', wordList);
+        // Create a regular expression from the word list
+        const words = wordList
+            .filter(item => item && typeof item === 'object')
+            .filter(item => !item.del_flag)
+            .map(item => item.word)
+            .filter(word => word && typeof word === 'string');
+        
+        if (words.length === 0) return;
+        
+        // Create regex pattern with word boundaries and escape special characters
+        const escapedWords = words.map(word => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+        const regex = new RegExp(`\\b(${escapedWords.join('|')})\\b`, 'gi');
+
+        // Walk through all text nodes in the target element
+        const walker = document.createTreeWalker(
+            targetElement,
+            NodeFilter.SHOW_TEXT,
+            {
+                acceptNode: function(node) {
+                    // Skip if parent is a sensitive element
+                    if (isGoogleSensitiveElement(node.parentElement)) {
+                        return NodeFilter.FILTER_REJECT;
+                    }
+
+                    // Skip if parent is script, style, or already highlighted
+                    if (
+                        node.parentElement.tagName === 'SCRIPT' ||
+                        node.parentElement.tagName === 'STYLE' ||
+                        node.parentElement.tagName === 'TEXTAREA' ||
+                        node.parentElement.tagName === 'INPUT' ||
+                        node.parentElement.classList.contains('word-highlighter-highlight') ||
+                        node.parentElement.closest('.word-highlighter-highlight') ||
+                        // Skip if node is empty or only whitespace
+                        !node.textContent.trim()
+                    ) {
+                        return NodeFilter.FILTER_REJECT;
+                    }
+                    return NodeFilter.FILTER_ACCEPT;
                 }
-                return `<span 
-                    class="word-highlighter-highlight" 
-                    id="${match.toLowerCase()}"
-                    data-star="${wordObj.star || 0}"
-                    data-user-id="${wordObj.user_id || 0}"
-                >${match}</span>`;
-            }
+            },
+            false
         );
-        node.parentNode.replaceChild(span, node);
-    });
 
-    // Add hover event listeners to highlighted words
-    addHighlightListeners();
+        const nodesToHighlight = [];
+        let node;
+        while (node = walker.nextNode()) {
+            // Reset regex lastIndex before testing
+            regex.lastIndex = 0;
+            const text = node.textContent;
+            if (regex.test(text)) {
+                regex.lastIndex = 0;  // Reset again for future use
+                nodesToHighlight.push(node);
+            }
+        }
+
+        console.log('Found nodes to highlight:', nodesToHighlight.length);
+        // Process the nodes that need highlighting
+        nodesToHighlight.forEach(node => {
+            if (!document.contains(node)) return;
+            
+            // Skip only input elements and editable content
+            if (isGoogleSensitiveElement(node.parentElement)) return;
+
+            const span = document.createElement('span');
+            regex.lastIndex = 0;
+            span.innerHTML = node.textContent.replace(
+                regex,
+                match => {
+                    const wordObj = wordList.find(item => 
+                        item.word.toLowerCase() === match.toLowerCase()
+                    );
+                    if (!wordObj || typeof wordObj !== 'object') {
+                        return match;
+                    }
+                    return `<span 
+                        class="word-highlighter-highlight" 
+                        id="${match.toLowerCase()}"
+                        data-star="${wordObj.star || 0}"
+                        data-user-id="${wordObj.user_id || 0}"
+                    >${match}</span>`;
+                }
+            );
+            node.parentNode.replaceChild(span, node);
+        });
+
+        // Add hover event listeners to highlighted words
+        addHighlightListeners();
+    } catch (error) {
+        console.error('Error in highlightWords:', error);
+    } finally {
+        targetElement.removeAttribute('data-processing');
+    }
 }
 
 // Function to fetch word definition from Youdao API
@@ -949,50 +975,190 @@ async function fetchWordDefinition(word) {
     }
 }
 
-// Function to initialize the mutation observer
+// Add these class names for Google's suggestion elements
+const GOOGLE_SUGGESTION_SELECTORS = {
+    container: '.UUbT9, .aajZCb', // Main suggestion container
+    item: '.wM6W7d, .s75CSd, .sbl1', // Individual suggestion text
+    wrapper: 'ul.G43f7e' // Suggestion list wrapper
+};
+
+// Update initContentObserver to better handle suggestions
 function initContentObserver() {
     if (!isExtensionEnabled) return;
     
-    // Disconnect existing observer if any
     if (contentObserver) {
         contentObserver.disconnect();
     }
 
-    // Create new observer
-    contentObserver = new MutationObserver((mutations) => {
-        // Get current word list for highlighting
-        chrome.storage.local.get(['wordList'], (result) => {
-            const wordList = result.wordList || [];
-            
-            mutations.forEach(mutation => {
-                // Handle added nodes
-                mutation.addedNodes.forEach(node => {
-                    // Check if node is an element and not a highlight
-                    if (node.nodeType === 1 && // ELEMENT_NODE
-                        !node.classList?.contains('word-highlighter-highlight') &&
-                        !node.closest('.word-highlighter-highlight') &&
-                        !node.closest('.word-highlighter-popup')) {
-                            
-                        // Create a temporary container for the new content
-                        const container = document.createElement('div');
-                        container.appendChild(node.cloneNode(true));
-                        
-                        // Apply highlighting to the new content
-                        highlightWords(wordList, node);
-                    }
-                });
-            });
+    let debounceTimer = null;
+    let processingMutation = false;
+
+    // Create a separate observer specifically for suggestions
+    const suggestionObserver = new MutationObserver((mutations) => {
+        mutations.forEach(mutation => {
+            if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                const suggestionTexts = mutation.target.querySelectorAll(GOOGLE_SUGGESTION_SELECTORS.item);
+                if (suggestionTexts.length > 0) {
+                    chrome.storage.local.get(['wordList'], (result) => {
+                        const wordList = result.wordList || [];
+                        suggestionTexts.forEach(text => {
+                            if (!text.hasAttribute('data-highlighted')) {
+                                highlightWords(wordList, text);
+                                text.setAttribute('data-highlighted', 'true');
+                            }
+                        });
+                    });
+                }
+            }
         });
     });
 
-    // Configure the observer
-    const config = {
-        childList: true,
-        subtree: true,
-        characterData: true
-    };
+    // Main content observer
+    contentObserver = new MutationObserver((mutations) => {
+        if (debounceTimer) {
+            clearTimeout(debounceTimer);
+        }
 
-    // Start observing
-    contentObserver.observe(document.body, config);
+        if (processingMutation) return;
+
+        debounceTimer = setTimeout(async () => {
+            try {
+                processingMutation = true;
+                const { wordList = [] } = await chrome.storage.local.get(['wordList']);
+
+                if (isGoogleSearch()) {
+                    // Handle search results
+                    const searchResults = document.querySelectorAll('.g, .jtfYYd, .MjjYud, .hlcw0c');
+                    searchResults.forEach(container => {
+                        if (!container.hasAttribute('data-highlighted')) {
+                            try {
+                                highlightWords(wordList, container);
+                                container.setAttribute('data-highlighted', 'true');
+                            } catch (error) {
+                                console.error('Error highlighting container:', error);
+                            }
+                        }
+                    });
+
+                    // Handle suggestion container setup
+                    const suggestionWrapper = document.querySelector(GOOGLE_SUGGESTION_SELECTORS.wrapper);
+                    if (suggestionWrapper && !suggestionWrapper.hasAttribute('data-observer-attached')) {
+                        suggestionObserver.observe(suggestionWrapper, {
+                            childList: true,
+                            subtree: true,
+                            characterData: false
+                        });
+                        suggestionWrapper.setAttribute('data-observer-attached', 'true');
+                    }
+                } else {
+                    // Handle non-Google pages
+                    mutations.forEach(mutation => {
+                        mutation.addedNodes.forEach(node => {
+                            if (node.nodeType === 1 && 
+                                !node.classList?.contains('word-highlighter-highlight') &&
+                                !node.closest('.word-highlighter-highlight')) {
+                                highlightWords(wordList, node);
+                            }
+                        });
+                    });
+                }
+            } catch (error) {
+                console.error('Error in mutation observer:', error);
+            } finally {
+                processingMutation = false;
+            }
+        }, 100);
+    });
+
+    // Set up observers for Google search page
+    if (isGoogleSearch()) {
+        // Observe main content
+        const mainContainer = document.getElementById('main') || document.body;
+        contentObserver.observe(mainContainer, {
+            childList: true,
+            subtree: true,
+            characterData: false
+        });
+
+        // Set up suggestion observer when the search box is focused
+        const searchInput = document.querySelector('input.gLFyf');
+        if (searchInput) {
+            searchInput.addEventListener('focus', () => {
+                const suggestionWrapper = document.querySelector(GOOGLE_SUGGESTION_SELECTORS.wrapper);
+                if (suggestionWrapper && !suggestionWrapper.hasAttribute('data-observer-attached')) {
+                    suggestionObserver.observe(suggestionWrapper, {
+                        childList: true,
+                        subtree: true,
+                        characterData: false
+                    });
+                    suggestionWrapper.setAttribute('data-observer-attached', 'true');
+                }
+            });
+        }
+
+        // Watch for suggestion container creation
+        const bodyObserver = new MutationObserver((mutations) => {
+            const suggestionWrapper = document.querySelector(GOOGLE_SUGGESTION_SELECTORS.wrapper);
+            if (suggestionWrapper && !suggestionWrapper.hasAttribute('data-observer-attached')) {
+                suggestionObserver.observe(suggestionWrapper, {
+                    childList: true,
+                    subtree: true,
+                    characterData: false
+                });
+                suggestionWrapper.setAttribute('data-observer-attached', 'true');
+                bodyObserver.disconnect();
+            }
+        });
+
+        bodyObserver.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+    } else {
+        contentObserver.observe(document.body, {
+            childList: true,
+            subtree: true,
+            characterData: false
+        });
+    }
+}
+
+// Add this helper function to check if we're on a Google search page
+function isGoogleSearch() {
+    return window.location.hostname.includes('google') && 
+           (window.location.pathname.includes('/search') || window.location.search.includes('?q='));
+}
+
+// Update the isGoogleSensitiveElement function to be more specific
+function isGoogleSensitiveElement(element) {
+    if (!element || !isGoogleSearch()) return false;
+    
+    // Only protect specific input elements
+    const sensitiveSelectors = [
+        'input[type="text"]', // Text inputs
+        'textarea', // Textareas
+        '[contenteditable="true"]', // Editable content
+        '.gLFyf', // Main search input
+        '.gsfi', // Search input field
+        'input.gLFyf' // Specific search input
+    ];
+    
+    return sensitiveSelectors.some(selector => 
+        element.matches?.(selector) || element.closest?.(selector)
+    );
+}
+
+// Add this helper function to check if a container is a Google search result
+function isSearchResultContainer(element) {
+    if (!element) return false;
+    const resultSelectors = [
+        '.g', '.jtfYYd', '.MjjYud', '.hlcw0c', // Search results
+        '.UUbT9', // Main suggestions container
+        '.sbl1', '.sbct', // Individual suggestion items
+        '.aypzV', // Suggestion text wrapper
+        '.wM6W7d', // Suggestion item content
+        '.erkvQe' // Related searches
+    ];
+    return resultSelectors.some(selector => element.matches?.(selector));
 }
 
