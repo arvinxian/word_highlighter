@@ -4,9 +4,15 @@ let isExtensionEnabled = true;
 // Global flag to prevent popup from showing while handling clicks
 let isHandlingClick = false;
 
+// Add this after the global variables
+let contentObserver = null;
+
 // Initialize extension state
 async function initializeExtensionState() {
     isExtensionEnabled = await checkSiteStatus();
+    if (isExtensionEnabled) {
+        initContentObserver();
+    }
 }
 
 // Check if current site is ignored
@@ -22,7 +28,7 @@ async function checkSiteStatus() {
 }
 
 // Function to highlight words in the page
-function highlightWords(wordList) {
+function highlightWords(wordList, targetElement = document.body) {
     if (!isExtensionEnabled) return;
 
     console.log('Highlighting words:', wordList);
@@ -39,9 +45,9 @@ function highlightWords(wordList) {
     const escapedWords = words.map(word => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
     const regex = new RegExp(`\\b(${escapedWords.join('|')})\\b`, 'gi');
 
-    // Walk through all text nodes in the document
+    // Walk through all text nodes in the target element
     const walker = document.createTreeWalker(
-        document.body,
+        targetElement,
         NodeFilter.SHOW_TEXT,
         {
             acceptNode: function(node) {
@@ -731,9 +737,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         
         // Apply new highlights
         highlightWords(request.wordList);
+        // Reinitialize the observer
+        initContentObserver();
         sendResponse({status: 'success'});
     } else if (request.action === 'disable') {
         isExtensionEnabled = false;
+        // Disconnect the observer
+        if (contentObserver) {
+            contentObserver.disconnect();
+        }
         removeAllHighlights();
         sendResponse({status: 'success'});
     } else if (request.action === 'updateStyles') {
@@ -935,5 +947,52 @@ async function fetchWordDefinition(word) {
         console.error('Error fetching OpenAI definition:', error);
         return `<p class="error">Error fetching OpenAI definition: ${error.message}</p>`;
     }
+}
+
+// Function to initialize the mutation observer
+function initContentObserver() {
+    if (!isExtensionEnabled) return;
+    
+    // Disconnect existing observer if any
+    if (contentObserver) {
+        contentObserver.disconnect();
+    }
+
+    // Create new observer
+    contentObserver = new MutationObserver((mutations) => {
+        // Get current word list for highlighting
+        chrome.storage.local.get(['wordList'], (result) => {
+            const wordList = result.wordList || [];
+            
+            mutations.forEach(mutation => {
+                // Handle added nodes
+                mutation.addedNodes.forEach(node => {
+                    // Check if node is an element and not a highlight
+                    if (node.nodeType === 1 && // ELEMENT_NODE
+                        !node.classList?.contains('word-highlighter-highlight') &&
+                        !node.closest('.word-highlighter-highlight') &&
+                        !node.closest('.word-highlighter-popup')) {
+                            
+                        // Create a temporary container for the new content
+                        const container = document.createElement('div');
+                        container.appendChild(node.cloneNode(true));
+                        
+                        // Apply highlighting to the new content
+                        highlightWords(wordList, node);
+                    }
+                });
+            });
+        });
+    });
+
+    // Configure the observer
+    const config = {
+        childList: true,
+        subtree: true,
+        characterData: true
+    };
+
+    // Start observing
+    contentObserver.observe(document.body, config);
 }
 
