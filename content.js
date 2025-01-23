@@ -7,12 +7,216 @@ let isHandlingClick = false;
 // Add this after the global variables
 let contentObserver = null;
 
+// Add new global variable to track current word list
+let currentWordList = [];
+
 // Initialize extension state
 async function initializeExtensionState() {
-    isExtensionEnabled = await checkSiteStatus();
-    if (isExtensionEnabled) {
-        initContentObserver();
+    try {
+        isExtensionEnabled = await checkSiteStatus();
+        if (isExtensionEnabled) {
+            const { wordList = [] } = await chrome.storage.local.get('wordList');
+            currentWordList = wordList;
+            
+            // Ensure we highlight immediately when the page loads
+            await highlightInitialContent();
+            
+            // Then set up the observer for dynamic content
+            initContentObserver();
+        }
+    } catch (error) {
+        console.error('Error initializing extension state:', error);
     }
+}
+
+// Add new function to handle initial content highlighting
+async function highlightInitialContent() {
+    // Wait for the page to be fully loaded
+    if (document.readyState !== 'complete') {
+        await new Promise(resolve => {
+            window.addEventListener('load', resolve, { once: true });
+        });
+    }
+
+    // Highlight the initial content
+    await highlightWords(currentWordList);
+}
+
+// Update the document ready handler
+function onDocumentReady(callback) {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', callback);
+        window.addEventListener('load', callback); // Also trigger on full load
+    } else {
+        callback();
+    }
+}
+
+// Initialize as soon as possible
+onDocumentReady(() => {
+    initializeExtensionState();
+});
+
+// Update initContentObserver for better dynamic content handling
+function initContentObserver() {
+    if (!isExtensionEnabled) return;
+    
+    if (contentObserver) {
+        contentObserver.disconnect();
+    }
+
+    let debounceTimer = null;
+    
+    contentObserver = new MutationObserver((mutations) => {
+        if (debounceTimer) {
+            clearTimeout(debounceTimer);
+        }
+
+        debounceTimer = setTimeout(async () => {
+            try {
+                const significantChanges = mutations.some(mutation => {
+                    // Check if the mutation is significant enough to warrant re-highlighting
+                    return mutation.addedNodes.length > 0 && 
+                           Array.from(mutation.addedNodes).some(node => 
+                               node.nodeType === 1 && // Element node
+                               !node.classList?.contains('word-highlighter-highlight') &&
+                               !node.closest('.word-highlighter-highlight')
+                           );
+                });
+
+                if (significantChanges) {
+                    await highlightWords(currentWordList);
+                }
+            } catch (error) {
+                console.error('Error in mutation observer:', error);
+            }
+        }, 100); // Short debounce time for better responsiveness
+    });
+
+    // Observe the entire document
+    contentObserver.observe(document.documentElement, {
+        childList: true,
+        subtree: true,
+        characterData: false
+    });
+}
+
+// Update highlightWords to be more thorough
+function highlightWords(wordList, targetElement = document.body) {
+    if (!isExtensionEnabled || !wordList?.length) return;
+    
+    // Update current word list
+    currentWordList = wordList;
+
+    // Remove existing highlights if we're processing the whole document
+    if (!targetElement || targetElement === document.body) {
+        removeAllHighlights();
+    }
+
+    // Skip if the target element is not in the document
+    if (!document.contains(targetElement)) return;
+
+    // Skip if the element is already being processed
+    if (targetElement.getAttribute('data-processing')) return;
+    targetElement.setAttribute('data-processing', 'true');
+
+    try {
+        // Create regex pattern once for efficiency
+        const words = wordList
+            .filter(item => item && typeof item === 'object' && !item.del_flag)
+            .map(item => item.word)
+            .filter(word => word && typeof word === 'string');
+        
+        if (!words.length) return;
+        
+        const escapedWords = words.map(word => 
+            word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        );
+        const regex = new RegExp(`\\b(${escapedWords.join('|')})\\b`, 'gi');
+
+        // Process all text nodes in the target element
+        const walker = document.createTreeWalker(
+            targetElement,
+            NodeFilter.SHOW_TEXT,
+            {
+                acceptNode: function(node) {
+                    if (shouldSkipNode(node)) {
+                        return NodeFilter.FILTER_REJECT;
+                    }
+                    return NodeFilter.FILTER_ACCEPT;
+                }
+            }
+        );
+
+        const nodesToHighlight = [];
+        let node;
+        while (node = walker.nextNode()) {
+            regex.lastIndex = 0;
+            if (regex.test(node.textContent)) {
+                nodesToHighlight.push(node);
+            }
+        }
+
+        // Process all nodes that need highlighting
+        nodesToHighlight.forEach(node => {
+            if (!document.contains(node)) return;
+            
+            const span = document.createElement('span');
+            regex.lastIndex = 0;
+            span.innerHTML = node.textContent.replace(regex, match => {
+                const wordObj = wordList.find(item => 
+                    item.word.toLowerCase() === match.toLowerCase()
+                );
+                if (!wordObj) return match;
+                
+                return `<span 
+                    class="word-highlighter-highlight" 
+                    id="${match.toLowerCase()}"
+                    data-star="${wordObj.star || 0}"
+                    data-user-id="${wordObj.user_id || 0}"
+                >${match}</span>`;
+            });
+            
+            if (node.parentNode) {
+                node.parentNode.replaceChild(span, node);
+            }
+        });
+
+        // Add hover event listeners to new highlights
+        addHighlightListeners();
+    } catch (error) {
+        console.error('Error in highlightWords:', error);
+    } finally {
+        targetElement.removeAttribute('data-processing');
+    }
+}
+
+// Add helper function to determine if a node should be skipped
+function shouldSkipNode(node) {
+    const parent = node.parentElement;
+    if (!parent) return true;
+
+    // Skip if parent is a script, style, or already highlighted
+    if (parent.tagName === 'SCRIPT' ||
+        parent.tagName === 'STYLE' ||
+        parent.tagName === 'TEXTAREA' ||
+        parent.tagName === 'INPUT' ||
+        parent.classList.contains('word-highlighter-highlight') ||
+        parent.closest('.word-highlighter-highlight')) {
+        return true;
+    }
+
+    // Skip if node is empty or only whitespace
+    if (!node.textContent.trim()) {
+        return true;
+    }
+
+    // Skip if parent is a sensitive element
+    if (isGoogleSensitiveElement(parent)) {
+        return true;
+    }
+
+    return false;
 }
 
 // Check if current site is ignored
@@ -24,118 +228,6 @@ async function checkSiteStatus() {
     } catch (error) {
         console.error('Error checking site status:', error);
         return true; // Default to enabled if error
-    }
-}
-
-// Function to highlight words in the page
-function highlightWords(wordList, targetElement = document.body) {
-    if (!isExtensionEnabled) return;
-
-    // Skip if the target element is not in the document
-    if (!document.contains(targetElement)) return;
-
-    // Skip if the element is already being processed
-    if (targetElement.getAttribute('data-processing')) return;
-    targetElement.setAttribute('data-processing', 'true');
-
-    try {
-        // For Google search results, only process if it's a result container
-        if (isGoogleSearch() && !isSearchResultContainer(targetElement)) {
-            return;
-        }
-
-        console.log('Highlighting words:', wordList);
-        // Create a regular expression from the word list
-        const words = wordList
-            .filter(item => item && typeof item === 'object')
-            .filter(item => !item.del_flag)
-            .map(item => item.word)
-            .filter(word => word && typeof word === 'string');
-        
-        if (words.length === 0) return;
-        
-        // Create regex pattern with word boundaries and escape special characters
-        const escapedWords = words.map(word => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-        const regex = new RegExp(`\\b(${escapedWords.join('|')})\\b`, 'gi');
-
-        // Walk through all text nodes in the target element
-        const walker = document.createTreeWalker(
-            targetElement,
-            NodeFilter.SHOW_TEXT,
-            {
-                acceptNode: function(node) {
-                    // Skip if parent is a sensitive element
-                    if (isGoogleSensitiveElement(node.parentElement)) {
-                        return NodeFilter.FILTER_REJECT;
-                    }
-
-                    // Skip if parent is script, style, or already highlighted
-                    if (
-                        node.parentElement.tagName === 'SCRIPT' ||
-                        node.parentElement.tagName === 'STYLE' ||
-                        node.parentElement.tagName === 'TEXTAREA' ||
-                        node.parentElement.tagName === 'INPUT' ||
-                        node.parentElement.classList.contains('word-highlighter-highlight') ||
-                        node.parentElement.closest('.word-highlighter-highlight') ||
-                        // Skip if node is empty or only whitespace
-                        !node.textContent.trim()
-                    ) {
-                        return NodeFilter.FILTER_REJECT;
-                    }
-                    return NodeFilter.FILTER_ACCEPT;
-                }
-            },
-            false
-        );
-
-        const nodesToHighlight = [];
-        let node;
-        while (node = walker.nextNode()) {
-            // Reset regex lastIndex before testing
-            regex.lastIndex = 0;
-            const text = node.textContent;
-            if (regex.test(text)) {
-                regex.lastIndex = 0;  // Reset again for future use
-                nodesToHighlight.push(node);
-            }
-        }
-
-        console.log('Found nodes to highlight:', nodesToHighlight.length);
-        // Process the nodes that need highlighting
-        nodesToHighlight.forEach(node => {
-            if (!document.contains(node)) return;
-            
-            // Skip only input elements and editable content
-            if (isGoogleSensitiveElement(node.parentElement)) return;
-
-            const span = document.createElement('span');
-            regex.lastIndex = 0;
-            span.innerHTML = node.textContent.replace(
-                regex,
-                match => {
-                    const wordObj = wordList.find(item => 
-                        item.word.toLowerCase() === match.toLowerCase()
-                    );
-                    if (!wordObj || typeof wordObj !== 'object') {
-                        return match;
-                    }
-                    return `<span 
-                        class="word-highlighter-highlight" 
-                        id="${match.toLowerCase()}"
-                        data-star="${wordObj.star || 0}"
-                        data-user-id="${wordObj.user_id || 0}"
-                    >${match}</span>`;
-                }
-            );
-            node.parentNode.replaceChild(span, node);
-        });
-
-        // Add hover event listeners to highlighted words
-        addHighlightListeners();
-    } catch (error) {
-        console.error('Error in highlightWords:', error);
-    } finally {
-        targetElement.removeAttribute('data-processing');
     }
 }
 
@@ -747,24 +839,40 @@ async function checkSiteStatus() {
 
 // Remove all highlights from the page
 function removeAllHighlights() {
-    document.querySelectorAll('.word-highlighter-highlight').forEach(element => {
+    const highlights = document.querySelectorAll('.word-highlighter-highlight');
+    highlights.forEach(element => {
         const textNode = document.createTextNode(element.textContent);
-        element.parentNode.replaceChild(textNode, element);
+        const parentSpan = element.parentElement;
+        
+        if (parentSpan && parentSpan.childNodes.length === 1) {
+            // If this is the only child, replace the entire parent span
+            parentSpan.parentNode.replaceChild(textNode, parentSpan);
+        } else {
+            // Otherwise just replace the highlight element
+            element.parentNode.replaceChild(textNode, element);
+        }
     });
 }
 
 // Listen for messages from the popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    console.log('Received message:', request);
+    console.log('Content script received message:', request);
+    
     if (request.action === 'highlight' || request.action === 'enable') {
         isExtensionEnabled = true;
-        // Remove all existing highlights first
-        removeAllHighlights();
+        currentWordList = request.wordList || [];
         
-        // Apply new highlights
-        highlightWords(request.wordList);
+        // Remove existing highlights and reapply
+        removeAllHighlights();
+        highlightWords(currentWordList);
+        
         // Reinitialize the observer
         initContentObserver();
+        sendResponse({status: 'success'});
+    } else if (request.action === 'updateWordList') {
+        currentWordList = request.wordList || [];
+        removeAllHighlights();
+        highlightWords(currentWordList);
         sendResponse({status: 'success'});
     } else if (request.action === 'disable') {
         isExtensionEnabled = false;
