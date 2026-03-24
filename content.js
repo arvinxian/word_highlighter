@@ -93,18 +93,35 @@ function handleUrlChange() {
 // Highlighting Core
 // ============================================================
 
+let incrementalHighlightTimer = null;
+let pendingIncrementalNodes = [];
+
 function scheduleRehighlight(delay = 300) {
     if (rehighlightTimer) clearTimeout(rehighlightTimer);
-    rehighlightTimer = setTimeout(() => performHighlighting(), delay);
+    rehighlightTimer = setTimeout(() => performHighlighting({ skipImmersiveTranslate: true }), delay);
 }
 
-function performHighlighting() {
+function scheduleIncrementalHighlight(nodes, delay = 300) {
+    pendingIncrementalNodes.push(...nodes);
+    if (incrementalHighlightTimer) clearTimeout(incrementalHighlightTimer);
+    incrementalHighlightTimer = setTimeout(() => {
+        const nodesToHighlight = pendingIncrementalNodes.filter(n => document.contains(n));
+        pendingIncrementalNodes = [];
+        if (nodesToHighlight.length > 0 && currentWordList?.length) {
+            stopObserving();
+            nodesToHighlight.forEach(node => highlightWords(currentWordList, node));
+            requestAnimationFrame(() => startObserving());
+        }
+    }, delay);
+}
+
+function performHighlighting({ skipImmersiveTranslate = false } = {}) {
     if (!isExtensionEnabled || !currentWordList?.length) return;
 
     // Disconnect observer to prevent feedback loops
     stopObserving();
 
-    removeAllHighlights();
+    removeAllHighlights({ skipImmersiveTranslate });
     highlightWords(currentWordList, document.body);
 
     // Reconnect observer after DOM settles
@@ -173,12 +190,11 @@ function highlightWords(wordList, targetElement = document.body) {
 
         if (!parts.some(p => p.type === 'match')) return;
 
-        const wrapper = document.createElement('span');
-        wrapper.className = 'word-highlighter-wrapper';
+        const fragment = document.createDocumentFragment();
 
         parts.forEach(part => {
             if (part.type === 'text') {
-                wrapper.appendChild(document.createTextNode(part.value));
+                fragment.appendChild(document.createTextNode(part.value));
             } else {
                 const wordObj = wordList.find(item =>
                     item.word.toLowerCase() === part.value.toLowerCase()
@@ -190,15 +206,15 @@ function highlightWords(wordList, targetElement = document.body) {
                     highlight.dataset.star = wordObj.star || 0;
                     highlight.dataset.userId = wordObj.user_id || 0;
                     highlight.textContent = part.value;
-                    wrapper.appendChild(highlight);
+                    fragment.appendChild(highlight);
                 } else {
-                    wrapper.appendChild(document.createTextNode(part.value));
+                    fragment.appendChild(document.createTextNode(part.value));
                 }
             }
         });
 
         if (textNode.parentNode) {
-            textNode.parentNode.replaceChild(wrapper, textNode);
+            textNode.parentNode.replaceChild(fragment, textNode);
         }
     });
 
@@ -209,23 +225,16 @@ function highlightWords(wordList, targetElement = document.body) {
 // Remove Highlights
 // ============================================================
 
-function removeAllHighlights() {
-    // Remove highlight spans first (replace with text nodes)
-    document.querySelectorAll('.word-highlighter-highlight').forEach(el => {
-        const text = document.createTextNode(el.textContent);
-        el.parentNode.replaceChild(text, el);
-    });
-
-    // Unwrap wrapper spans (move children out, remove wrapper)
+function removeAllHighlights({ skipImmersiveTranslate = false } = {}) {
+    // Replace highlight spans with text nodes
     const parentsToNormalize = new Set();
-    document.querySelectorAll('.word-highlighter-wrapper').forEach(wrapper => {
-        const parent = wrapper.parentNode;
+    document.querySelectorAll('.word-highlighter-highlight').forEach(el => {
+        if (skipImmersiveTranslate && isImmersiveTranslateElement(el)) return;
+        const parent = el.parentNode;
         if (!parent) return;
         parentsToNormalize.add(parent);
-        while (wrapper.firstChild) {
-            parent.insertBefore(wrapper.firstChild, wrapper);
-        }
-        parent.removeChild(wrapper);
+        const text = document.createTextNode(el.textContent);
+        parent.replaceChild(text, el);
     });
 
     // Merge adjacent text nodes for clean DOM
@@ -243,19 +252,36 @@ function startObserving() {
     if (contentObserver) contentObserver.disconnect();
 
     contentObserver = new MutationObserver((mutations) => {
-        const hasSignificantChanges = mutations.some(mutation => {
-            if (mutation.addedNodes.length === 0) return false;
-            return Array.from(mutation.addedNodes).some(node =>
-                node.nodeType === 1 &&
-                !node.classList?.contains('word-highlighter-wrapper') &&
-                !node.classList?.contains('word-highlighter-highlight') &&
-                !node.closest?.('.word-highlighter-wrapper') &&
-                !node.closest?.('.word-highlighter-highlight') &&
-                !node.closest?.('.word-highlighter-popup')
-            );
-        });
+        const newNodes = [];
+        let hasNonTranslateChanges = false;
 
-        if (hasSignificantChanges) {
+        for (const mutation of mutations) {
+            if (mutation.addedNodes.length === 0) continue;
+            for (const node of mutation.addedNodes) {
+                if (node.nodeType !== 1) continue;
+                if (node.classList?.contains('word-highlighter-highlight') ||
+                    node.closest?.('.word-highlighter-highlight') ||
+                    node.closest?.('.word-highlighter-popup')) {
+                    continue;
+                }
+
+                if (isImmersiveTranslateElement(node) ||
+                    (mutation.target?.nodeType === 1 && isImmersiveTranslateElement(mutation.target))) {
+                    // Immersive Translate content: highlight incrementally (no full rehighlight)
+                    newNodes.push(node);
+                } else {
+                    hasNonTranslateChanges = true;
+                }
+            }
+        }
+
+        // For Immersive Translate nodes, highlight only the new nodes directly
+        if (newNodes.length > 0) {
+            scheduleIncrementalHighlight(newNodes);
+        }
+
+        // For other DOM changes, do a full rehighlight
+        if (hasNonTranslateChanges) {
             scheduleRehighlight();
         }
     });
@@ -278,11 +304,39 @@ function stopObserving() {
         clearTimeout(rehighlightTimer);
         rehighlightTimer = null;
     }
+    if (incrementalHighlightTimer) {
+        clearTimeout(incrementalHighlightTimer);
+        incrementalHighlightTimer = null;
+    }
 }
 
 // ============================================================
 // Helper Functions
 // ============================================================
+
+function isImmersiveTranslateElement(element) {
+    if (!element) return false;
+    return element.closest('[class*="immersive-translate"]') ||
+        element.closest('[data-immersive-translate-walked]') ||
+        element.closest('[data-immersive-translate-paragraph]');
+}
+
+function isElementHiddenOrClipped(element) {
+    // Quick check: zero dimensions means not visible
+    if (element.offsetHeight === 0 && element.offsetWidth === 0) return true;
+
+    // Check for overflow clipping with text truncation on the element or ancestors
+    let el = element;
+    while (el && el !== document.body) {
+        const style = getComputedStyle(el);
+        if (style.overflow === 'hidden' &&
+            (style.textOverflow === 'ellipsis' || style.whiteSpace === 'nowrap')) {
+            return true;
+        }
+        el = el.parentElement;
+    }
+    return false;
+}
 
 function shouldSkipNode(node) {
     const parent = node.parentElement;
@@ -293,7 +347,6 @@ function shouldSkipNode(node) {
         parent.tagName === 'TEXTAREA' ||
         parent.tagName === 'INPUT' ||
         parent.classList.contains('word-highlighter-highlight') ||
-        parent.classList.contains('word-highlighter-wrapper') ||
         parent.closest('.word-highlighter-highlight') ||
         parent.closest('.word-highlighter-popup')) {
         return true;
@@ -301,6 +354,9 @@ function shouldSkipNode(node) {
 
     if (!node.textContent.trim()) return true;
     if (isGoogleSensitiveElement(parent)) return true;
+
+    // Skip nodes inside hidden or overflow-clipped elements
+    if (isElementHiddenOrClipped(parent)) return true;
 
     return false;
 }
@@ -870,11 +926,6 @@ function updateHighlightStyles(styles) {
             margin: 0;
             background-clip: padding-box;
             mix-blend-mode: normal !important;
-        }
-        .word-highlighter-wrapper {
-            display: inline;
-            margin: 0;
-            padding: 0;
         }
         .pdfViewer .word-highlighter-highlight {
             background-color: ${styles.highlightColor || '#ffff00'} !important;
