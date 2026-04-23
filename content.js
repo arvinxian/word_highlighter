@@ -762,13 +762,14 @@ function showAddWordPopup(selectedText, x, y) {
 async function fetchWordDefinition(word) {
     try {
         const config = await chrome.storage.sync.get([
-            'openaiKey', 'openaiBaseUrl', 'openaiPrompt'
+            'openaiKey', 'openaiBaseUrl', 'openaiModel', 'openaiPrompt'
         ]);
 
         if (!config.openaiKey || !config.openaiBaseUrl || !config.openaiPrompt) {
             throw new Error('OpenAI configuration not found');
         }
 
+        const model = (config.openaiModel && config.openaiModel.trim()) || 'gpt-5-nano';
         const prompt = config.openaiPrompt.replace('{word}', word);
 
         const response = await fetch(config.openaiBaseUrl, {
@@ -778,7 +779,7 @@ async function fetchWordDefinition(word) {
                 'Authorization': `Bearer ${config.openaiKey}`
             },
             body: JSON.stringify({
-                model: "gpt-5-nano",
+                model: model,
                 messages: [{ role: "user", content: prompt }]
             })
         });
