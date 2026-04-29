@@ -35,15 +35,11 @@
     box-shadow: 0 2px 5px rgba(0,0,0,0.2);
     z-index: 999999;
     user-select: none;
+    width: clamp(280px, 30vw, 450px);
     max-height: 80vh;
     overflow-y: auto;
-    max-width: 90vw;
     transition: opacity 0.3s ease-out;
-    will-change: transform;
-    transform: translateZ(0);
-    transition: left 0.2s ease-out, top 0.2s ease-out, opacity 0.3s ease-out;
     pointer-events: auto;
-    backface-visibility: hidden;
     -webkit-font-smoothing: subpixel-antialiased;
 }
 
@@ -94,7 +90,7 @@
 
 .word-highlighter-popup .definition-container {
     margin: 10px 0;
-    max-height: 200px;
+    height: 40vh;
     overflow-y: auto;
     border: 1px solid #ddd;
     padding: 10px;
@@ -102,13 +98,6 @@
     background-color: #f9f9f9;
     text-align: left;
     color: #333 !important;
-    max-height: 50vh;
-    overflow-y: auto;
-    transition: height 0.2s ease-out;
-    contain: content;
-    will-change: contents;
-    transform: translateZ(0);
-    backface-visibility: hidden;
 }
 
 .word-highlighter-popup .definition-container * {
@@ -184,13 +173,9 @@
     border-radius: 4px;
     background-color: #f9f9f9;
     text-align: left;
-    font-size: 13px;  /* Base font size for all definition content */
+    font-size: 13px;
     line-height: 1.4;
     font-family: Arial, sans-serif;
-    contain: content;
-    will-change: contents;
-    transform: translateZ(0);
-    backface-visibility: hidden;
 }
 
 /* Style all headings in definitions to be the same size */

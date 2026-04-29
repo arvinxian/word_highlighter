@@ -416,41 +416,9 @@ function calculatePopupPosition(rect, popupElement) {
 }
 
 function handlePopupResize(popup, rect) {
-    let isPositionLocked = false;
-    let resizeTimeout = null;
-    let lastHeight = null;
-    let stablePositionTimeout = null;
-
-    const updatePosition = (entry) => {
-        const currentHeight = entry.contentRect.height;
-        if (isPositionLocked && lastHeight && Math.abs(currentHeight - lastHeight) < 20) return;
-
-        const { left, top } = calculatePopupPosition(rect, popup);
-        popup.style.transition = 'left 0.2s, top 0.2s';
-        popup.style.left = `${left}px`;
-        popup.style.top = `${top}px`;
-        lastHeight = currentHeight;
-
-        if (stablePositionTimeout) clearTimeout(stablePositionTimeout);
-        stablePositionTimeout = setTimeout(() => { isPositionLocked = true; }, 1000);
-    };
-
-    const resizeObserver = new ResizeObserver((entries) => {
-        if (resizeTimeout) clearTimeout(resizeTimeout);
-        resizeTimeout = setTimeout(() => {
-            updatePosition(entries[entries.length - 1]);
-        }, 100);
-    });
-
-    resizeObserver.observe(popup);
-
-    popup.cleanup = () => {
-        if (resizeTimeout) clearTimeout(resizeTimeout);
-        if (stablePositionTimeout) clearTimeout(stablePositionTimeout);
-        resizeObserver.disconnect();
-    };
-
-    return resizeObserver;
+    // Popup has a fixed size via CSS, so no resize handling is needed.
+    // Return a stub with disconnect() so callers don't break.
+    return { disconnect() {} };
 }
 
 // ============================================================
